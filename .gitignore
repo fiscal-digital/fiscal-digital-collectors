@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build artifacts
+dist/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
