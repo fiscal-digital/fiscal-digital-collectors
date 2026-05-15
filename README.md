@@ -8,6 +8,9 @@
 
 [fiscaldigital.org](https://fiscaldigital.org) · [@FiscalDigitalBR](https://x.com/FiscalDigitalBR)
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status: dev](https://img.shields.io/badge/status-em%20desenvolvimento-yellow.svg)]()
+
 ---
 
 ## 🇧🇷 Português
@@ -31,7 +34,7 @@ TypeScript strict · Node.js 24.x · AWS Lambda agendada via EventBridge · Dyna
 
 ### Status
 
-🚧 **Em desenvolvimento.** Primeira fonte (Querido Diário) já roda dentro do repo `fiscal-digital`. Este repo passa a hospedar as integrações conforme amadurecem e ganham contratos estáveis.
+✅ **Em produção.** Collector do Querido Diário roda diariamente desde 2026-05-11 dentro do repo [`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital), via Lambda agendada por EventBridge. Arquiva PDFs em S3 com cache de extração (texto + excerpts) para reprocessamento futuro sem custo. Cobertura atual: 50 cidades ativas + 2 planejadas. Este repo (`fiscal-digital-collectors`) hospeda os próximos adaptadores conforme amadurecem (Fase 2: RFB, CGU CEIS/CNEP, TSE).
 
 ### Princípios
 
@@ -52,7 +55,7 @@ Public data source adapters for the Fiscal Digital pipeline. Normalizes Brazilia
 
 Stack: TypeScript strict, AWS Lambda + EventBridge, DynamoDB cache, SQS rate limiting, Terraform.
 
-Status: under development.
+Status: in production. The Querido Diário collector runs daily since 2026-05-11 inside the [`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital) repo, archiving PDFs to S3 with an extraction cache (text + excerpts) so reprocessing is free. Current coverage: 50 active cities plus 2 planned. This repo (`fiscal-digital-collectors`) will host the next adapters as they mature (Phase 2: RFB, CGU CEIS/CNEP, TSE).
 
 License: MIT.
 
