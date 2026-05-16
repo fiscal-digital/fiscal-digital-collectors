@@ -4,7 +4,7 @@
 
 ## 🇧🇷 Português
 
-**Fonte oficial:** CGU (Controladoria-Geral da Uniao) — cadastros de empresas sancionadas: CEIS (Cadastro de Empresas Inidôneas e Suspensas) e CNEP (Cadastro Nacional de Empresas Punidas). Distribuicao via [Portal da Transparencia](https://portaldatransparencia.gov.br) e dados.gov.br.
+**Fonte oficial:** CGU (Controladoria-Geral da Uniao). Cadastros de empresas sancionadas: CEIS (Cadastro de Empresas Inidôneas e Suspensas) e CNEP (Cadastro Nacional de Empresas Punidas). Distribuicao via [Portal da Transparencia](https://portaldatransparencia.gov.br) e dados.gov.br.
 
 **Status:** 🟡 Planejado. A skill `check_sanctions.ts` existe no engine e já é chamada pelos Fiscais, mas o adapter de ingestao dos dumps CSV ainda nao foi extraído para este repo.
 
@@ -12,14 +12,14 @@
 
 **Contrato de saída esperado:**
 
-- `cnpj` — 14 dígitos sem formatação
-- `razaoSocial` — string
-- `cadastro` — `CEIS` | `CNEP`
-- `tipoSancao` — string normalizado conforme categorias CGU
-- `dataInicio` — ISO8601
-- `dataFim` — ISO8601 ou null (sanção vigente sem prazo)
-- `orgaoAplicador` — string
-- `fonteUrl` — URL do registro oficial no Portal da Transparencia
+- `cnpj`: 14 dígitos sem formatação
+- `razaoSocial`: string
+- `cadastro`: `CEIS` | `CNEP`
+- `tipoSancao`: string normalizado conforme categorias CGU
+- `dataInicio`: ISO8601
+- `dataFim`: ISO8601 ou null (sanção vigente sem prazo)
+- `orgaoAplicador`: string
+- `fonteUrl`: URL do registro oficial no Portal da Transparencia
 
 **Princípios herdados:** idempotência, rate limit, cache antes de chamada e logs estruturados JSON definidos em [../../README.md#princípios](../../README.md#princípios).
 
@@ -33,7 +33,7 @@
 
 ## 🇺🇸 English
 
-**Official source:** CGU (Brazilian Federal Comptroller General) — sanctioned companies registries: CEIS and CNEP. Distribution via [Portal da Transparencia](https://portaldatransparencia.gov.br) and dados.gov.br.
+**Official source:** CGU (Brazilian Federal Comptroller General). Sanctioned companies registries (CEIS and CNEP). Distribution via [Portal da Transparencia](https://portaldatransparencia.gov.br) and dados.gov.br.
 
 **Status:** 🟡 Planned. Skill `check_sanctions.ts` exists in the engine. A CSV ingestion adapter has not yet been extracted to this repo.
 

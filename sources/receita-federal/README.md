@@ -4,7 +4,7 @@
 
 ## 🇧🇷 Português
 
-**Fonte oficial:** Receita Federal do Brasil — CNPJ (situação cadastral, sócios, data de abertura). Acesso atual indireto via [BrasilAPI](https://brasilapi.com.br).
+**Fonte oficial:** Receita Federal do Brasil. Dados de CNPJ (situação cadastral, sócios, data de abertura). Acesso atual indireto via [BrasilAPI](https://brasilapi.com.br).
 
 **Status:** 🚧 Parcial. A skill `validate_cnpj.ts` faz proxy para a BrasilAPI e já está ativa em produção. Um adapter dedicado com cache DynamoDB e fallback para dump CSV ainda não foi extraído para este repo.
 
@@ -12,13 +12,13 @@
 
 **Contrato de saída esperado:**
 
-- `cnpj` — 14 dígitos sem formatação
-- `razaoSocial` — string
-- `situacaoCadastral` — `ATIVA` | `BAIXADA` | `INAPTA` | `NULA` | `SUSPENSA`
-- `dataAbertura` — ISO8601
-- `cnaePrincipal` — código e descrição
-- `socios` — array de `{nome, qualificacao}`
-- `fetchedAt` — timestamp do lookup
+- `cnpj`: 14 dígitos sem formatação
+- `razaoSocial`: string
+- `situacaoCadastral`: `ATIVA` | `BAIXADA` | `INAPTA` | `NULA` | `SUSPENSA`
+- `dataAbertura`: ISO8601
+- `cnaePrincipal`: código e descrição
+- `socios`: array de `{nome, qualificacao}`
+- `fetchedAt`: timestamp do lookup
 
 **Princípios herdados:** idempotência, rate limit, cache antes de chamada e logs estruturados JSON definidos em [../../README.md#princípios](../../README.md#princípios).
 
@@ -32,7 +32,7 @@
 
 ## 🇺🇸 English
 
-**Official source:** Brazilian Federal Revenue (Receita Federal) — company registry (CNPJ). Current access via [BrasilAPI](https://brasilapi.com.br) proxy.
+**Official source:** Brazilian Federal Revenue (Receita Federal). Company registry data (CNPJ). Current access via [BrasilAPI](https://brasilapi.com.br) proxy.
 
 **Status:** 🚧 Partial. Skill `validate_cnpj.ts` is active in production. A dedicated adapter with DynamoDB cache has not yet been extracted to this repo.
 
