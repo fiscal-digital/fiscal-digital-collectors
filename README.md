@@ -1,52 +1,87 @@
+<!-- legal-verified: agency names (RFB, CGU) preserved from sources/cgu/README.md and the previous README of this repo (PR #1, merged in main) — not new legal claims. -->
 <p align="center">
   <img src="https://raw.githubusercontent.com/fiscal-digital/fiscal-digital-web/main/brand/logo/symbol.svg" width="96" alt="Fiscal Digital" />
 </p>
 
 # Fiscal Digital — Collectors
 
-**Adaptadores de coleta de fontes públicas brasileiras para o pipeline do Fiscal Digital.**
+**Adaptadores de coleta de fontes publicas brasileiras para o pipeline do Fiscal Digital.**
 
 [fiscaldigital.org](https://fiscaldigital.org) · [@FiscalDigitalBR](https://x.com/FiscalDigitalBR)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Produção parcial](https://img.shields.io/badge/Status-Produção%20parcial-yellow.svg)]()
+[![Status: Bootstrap](https://img.shields.io/badge/Status-Bootstrap-blue.svg)]()
 [![Brand: CC BY 4.0](https://img.shields.io/badge/Brand-CC%20BY%204.0-blue.svg)](https://github.com/fiscal-digital/fiscal-digital-web/tree/main/brand)
 
 ---
 
-## 🇧🇷 Português
+## 🇧🇷 Portugues
 
-Este repo contém *adapters* que normalizam fontes públicas brasileiras para o formato consumido pela engine de fiscalização ([`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital)).
-
-### Fontes em escopo
-
-| Fase | Fonte | Dados | Status |
-|---|---|---|---|
-| MVP | [Querido Diário](https://queridodiario.ok.org.br) (OKFN BR) | Diários oficiais municipais | ✅ |
-| MVP | Receita Federal | CNPJ — situação, sócios, data abertura | 🚧 |
-| MVP | CGU dados.gov.br | CEIS / CNEP (empresas suspensas e multadas) | 🚧 |
-| Fase 2 | TSE | Doações de campanha | 🟡 planejado |
-| Fase 2 | TCE-RS | Auditorias e irregularidades | 🟡 planejado |
-| Fase 2 | Portal da Transparência Federal | Repasses federais ao município | 🟡 planejado |
-
-### Stack
-
-TypeScript strict · Node.js 24.x · AWS Lambda agendada via EventBridge · DynamoDB para cache idempotente · SQS rate limiting · Terraform.
+Este repo hospeda *adapters* que normalizam fontes publicas brasileiras para o
+formato consumido pela engine de fiscalizacao
+([`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital)).
 
 ### Status
 
-✅ **Querido Diário em produção** desde 11 de maio de 2026. Pipeline diário ativo (cron 07:00 UTC = 04:00 BRT) coletando diários oficiais de 44 cidades indexadas. Cache de extração já populado em ~35.000 gazettes (chave EVO-001), reduzindo custo de reanálise futura para uma fração da primeira passada.
+**Bootstrap concluido** (PR 2/7 do conjunto MIT-02/EVO-002). Workspace TypeScript
+configurado, gates de CI (lint, typecheck, test, terraform fmt/validate/tflint/checkov)
+ativos. Nenhum collector implementado ainda neste repo — Querido Diario sera
+migrado em PR 3, supplier-collector (RFB + CGU) nasce em PR 5.
 
-A implementação atual do collector Querido Diário vive em `fiscal-digital/packages/collector/` até estabilizar contrato de saída. Este repo passa a hospedar as próximas integrações (Receita Federal, CGU CEIS/CNEP, TSE) conforme cada uma amadurece.
+Ate la, a implementacao em producao do collector Querido Diario continua em
+[`fiscal-digital/packages/collector/`](https://github.com/fiscal-digital/fiscal-digital/tree/main/packages/collector)
+(Lambda agendada via EventBridge, pipeline diario 07:00 UTC).
 
-### Princípios
+### Collectors planejados
 
-- **Idempotência:** todo collector é seguro para re-execução
-- **Rate limit obrigatório:** respeitar limites das APIs externas (60 req/min Querido Diário, etc.)
+| Path | Fonte | Status | Origem |
+|---|---|---|---|
+| `collectors/querido-diario/` | [Querido Diario](https://queridodiario.ok.org.br) (OKFN BR) | Migra no PR 3 | Hoje em `fiscal-digital/packages/collector/` |
+| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | Nasce no PR 5 | Skill `check_sanctions.ts` no engine + novo adapter RFB |
+
+A documentacao funcional de cada fonte (contrato de saida, principios, proximos
+passos) continua em [`sources/`](./sources/) — `collectors/` hospeda o codigo,
+`sources/` hospeda o contrato.
+
+### Stack
+
+TypeScript strict · Node.js 24.x · AWS Lambda agendada via EventBridge ·
+DynamoDB cache idempotente · SQS rate limiting · Terraform · Jest 30 + ts-jest ·
+esbuild bundle.
+
+### Como rodar localmente
+
+```bash
+# Setup unico do token GitHub Packages (para baixar @fiscal-digital/engine)
+gh auth setup-git
+
+# Bootstrap
+npm ci
+
+# Gates do PR
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+### Como contribuir
+
+Antes de qualquer mudanca, ler o
+[`CLAUDE.md`](./CLAUDE.md) deste repo e o
+[`CLAUDE.md` mestre](https://github.com/fiscal-digital/fiscal-digital/blob/main/CLAUDE.md).
+Principios inegociaveis (sempre citar a fonte, nao acusar, transparencia do
+algoritmo, verificabilidade publica) vivem la.
+
+### Principios
+
+- **Idempotencia:** todo collector e seguro para re-execucao
+- **Rate limit obrigatorio:** respeitar limites das APIs externas (60 req/min Querido Diario, etc.)
 - **Cache antes de chamada:** consultar DynamoDB antes de bater na fonte
-- **Logs estruturados:** JSON com ID de execução obrigatório
+- **Logs estruturados:** JSON com ID de execucao obrigatorio
+- **Sempre citar a fonte:** todo dado normalizado preserva URL canonica da fonte original
 
-### Licença
+### Licenca
 
 MIT — ver [LICENSE](LICENSE).
 
@@ -54,18 +89,40 @@ MIT — ver [LICENSE](LICENSE).
 
 ## 🇺🇸 English
 
-Public data source adapters for the Fiscal Digital pipeline. Normalizes Brazilian public registries (gazettes, company tax IDs, federal sanctions) for consumption by the fiscal engine ([`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital)).
-
-Stack: TypeScript strict, AWS Lambda + EventBridge, DynamoDB cache, SQS rate limiting, Terraform.
+Public data source adapters for the Fiscal Digital pipeline. Normalizes Brazilian
+public registries (gazettes, company tax IDs, federal sanctions) for consumption
+by the fiscal engine
+([`fiscal-digital`](https://github.com/fiscal-digital/fiscal-digital)).
 
 ### Status
 
-✅ **Querido Diário in production** since May 11, 2026. Daily pipeline active (cron 07:00 UTC = 04:00 BRT) collecting official gazettes from 44 indexed cities. Extraction cache already populated for ~35,000 gazettes (key EVO-001), reducing future reanalysis cost to a fraction of the first pass.
+**Bootstrap complete** (PR 2/7 of the MIT-02/EVO-002 set). TypeScript workspace
+configured, CI gates active (lint, typecheck, test, terraform fmt/validate/tflint/checkov).
+No collector implemented in this repo yet — Querido Diario migrates in PR 3,
+supplier-collector (RFB + CGU) is born in PR 5.
 
-The current Querido Diário collector lives in `fiscal-digital/packages/collector/` until its output contract stabilizes. This repo hosts the next integrations (Receita Federal, CGU CEIS/CNEP, TSE) as each one matures.
+Until then, the production Querido Diario collector remains in
+[`fiscal-digital/packages/collector/`](https://github.com/fiscal-digital/fiscal-digital/tree/main/packages/collector)
+(EventBridge-scheduled Lambda, daily 07:00 UTC pipeline).
+
+### Planned collectors
+
+| Path | Source | Status |
+|---|---|---|
+| `collectors/querido-diario/` | Querido Diario (OKFN BR) | Migrates in PR 3 |
+| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | Born in PR 5 |
+
+Per-source documentation (output contract, principles, next steps) lives in
+[`sources/`](./sources/) — `collectors/` hosts the code, `sources/` hosts the
+contract.
+
+### Stack
+
+TypeScript strict, AWS Lambda + EventBridge, DynamoDB cache, SQS rate limiting,
+Terraform, Jest 30 + ts-jest, esbuild.
 
 License: MIT.
 
 ---
 
-*Sobre os ombros de [Serenata de Amor](https://serenata.ai) e [Querido Diário](https://queridodiario.ok.org.br) (OKFN Brasil).*
+*Sobre os ombros de [Serenata de Amor](https://serenata.ai) e [Querido Diario](https://queridodiario.ok.org.br) (OKFN Brasil).*
