@@ -1,28 +1,77 @@
-# dependencies
+# --- Dependencies ---------------------------------------------------
 node_modules/
 
-# build artifacts
+# --- Build artifacts ------------------------------------------------
 dist/
+build/
 *.tsbuildinfo
+*.js.map
 
-# env
-.env
-.env.local
-.env.*.local
+# --- Test / coverage ------------------------------------------------
+coverage/
+.nyc_output/
+junit.xml
 
-# logs
+# --- Lambda bundles -------------------------------------------------
+*.zip
+
+# --- Logs -----------------------------------------------------------
 *.log
 npm-debug.log*
 
-# Terraform
+# --- Env / secrets --------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+auth.json
+
+# --- Cloud credentials ----------------------------------------------
+.aws/
+.netrc
+# .npmrc local NÃO commitado (pode conter tokens); o do repo é versionado.
+.npmrc
+!/.npmrc
+
+# --- Terraform ------------------------------------------------------
 .terraform/
 .terraform.lock.hcl
 *.tfstate
 *.tfstate.*
-*.tfvars
+# tfvars de ambiente (prod.tfvars) SAO versionados — usados pelo CI.
+# Apenas overrides locais ficam fora do repo.
+*.local.tfvars
+tfplan
+*.tfplan
 
-# Editor
+# --- IDE / OS -------------------------------------------------------
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.history/
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# --- Backups & temp -------------------------------------------------
+*.bak
+*.tmp
+*.orig
+/tmp/
+
+# --- AI / dev meta (não vai para o repo público) ------------------
+# .claude/ tem dois arquivos versionados (settings.json + hook de citação
+# jurídica). Tudo o mais (logs, runs, projetos) fica fora.
+# Como o git não permite reincluir arquivos dentro de diretório ignorado,
+# listamos cada subpath explicitamente em vez de ignorar `.claude/` inteiro.
+.claude/logs/
+.claude/projects/
+.claude/runs/
+.claude/agents/
+.claude/skills/
+.claude/worktrees/
+.claude/*.log
+.learnings/
