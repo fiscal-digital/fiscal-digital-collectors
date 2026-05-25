@@ -1,0 +1,108 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@fiscal-digital'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Build collectors
+        run: npm run build
+
+      - name: Bundle Lambdas
+        # Loop sobre os workspaces presentes em collectors/*.
+        # Bootstrap nao tem nenhum collector ainda — o for vira no-op.
+        run: |
+          shopt -s nullglob
+          for dir in collectors/*/ ; do
+            name=$(basename "$dir")
+            echo "::group::bundle $name"
+            npm run bundle --workspace="collectors/${name}" --if-present
+            echo "::endgroup::"
+          done
+
+      - name: Zip Lambdas
+        run: |
+          shopt -s nullglob
+          for dir in collectors/*/dist/ ; do
+            name=$(basename "$(dirname "$dir")")
+            if [ -f "${dir}index.js" ]; then
+              zip -j "${dir}function.zip" "${dir}index.js"
+              echo "zipped: ${name}"
+            fi
+          done
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform Init
+        # Enquanto o backend S3 nao for configurado (PR 3), pulamos init/apply.
+        if: false
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        if: false
+        working-directory: terraform
+        run: terraform apply -var-file=environments/prod.tfvars -auto-approve
+
+      - name: Deploy Lambda code
+        # Loop sobre os zips gerados. No-op no bootstrap (nenhum collector
+        # ainda — primeiro vira no PR 3 com Querido Diario).
+        run: |
+          shopt -s nullglob
+          for zip in collectors/*/dist/function.zip ; do
+            name=$(basename "$(dirname "$(dirname "$zip")")")
+            fn="fiscal-digital-collector-${name}-prod"
+            echo "::group::deploy ${fn}"
+            aws lambda update-function-code \
+              --function-name "$fn" \
+              --zip-file "fileb://${zip}" \
+              --no-cli-pager
+            aws lambda wait function-updated \
+              --function-name "$fn" \
+              --no-cli-pager
+            VERSION=$(aws lambda publish-version \
+              --function-name "$fn" \
+              --no-cli-pager \
+              --query Version --output text)
+            aws lambda update-alias \
+              --function-name "$fn" \
+              --name prod \
+              --function-version "$VERSION" \
+              --no-cli-pager 2>/dev/null || \
+            aws lambda create-alias \
+              --function-name "$fn" \
+              --name prod \
+              --function-version "$VERSION" \
+              --no-cli-pager
+            echo "::endgroup::"
+          done
