@@ -54,46 +54,46 @@ jobs:
       # com lint + typecheck + test (acima); pipeline terraform fica para
       # PR interno. Ver LRN-20260523-003 no monorepo.
       - name: Configure AWS credentials (OIDC)
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Setup Terraform
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform fmt check
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: terraform init -backend=false
 
       - name: Terraform Validate
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: terraform validate
 
       - name: Setup tflint
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
 
       - name: Run tflint
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: |
           tflint --init
           tflint --recursive --format=compact --minimum-failure-severity=error
 
       - name: Run checkov
-        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform
