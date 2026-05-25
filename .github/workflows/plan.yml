@@ -1,0 +1,126 @@
+name: Terraform Plan + Lint + Test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  packages: read
+
+# Serializa runs que tocam o terraform state remoto deste repo
+# (state separado do monorepo via key dedicada — ver terraform/backend.tf).
+concurrency:
+  group: terraform-state-collectors-prod
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@fiscal-digital'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build (no-op enquanto nao houver collector)
+        run: npm run build
+
+      # ─── Pipeline de infra (precisa de secrets) ──────────────────────────
+      # Steps abaixo NAO rodam em PR de fork: secrets nao sao expostos a
+      # forks por design de seguranca do GitHub Actions. PR de fork passa
+      # com lint + typecheck + test (acima); pipeline terraform fica para
+      # PR interno. Ver LRN-20260523-003 no monorepo.
+      - name: Configure AWS credentials (OIDC)
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform fmt check
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        working-directory: terraform
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Setup tflint
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+
+      - name: Run tflint
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --recursive --format=compact --minimum-failure-severity=error
+
+      - name: Run checkov
+        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+      - name: Terraform Plan
+        id: plan
+        # Enquanto o backend S3 nao for configurado (PR 3), pulamos plan.
+        # O step continua aqui pronto para ativar — basta descomentar
+        # backend "s3" em terraform/backend.tf e remover este `if false`.
+        if: false
+        working-directory: terraform
+        run: |
+          set -o pipefail
+          terraform plan \
+            -var-file=environments/prod.tfvars \
+            -no-color \
+            -input=false \
+            -out=tfplan.bin 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Upload plan artifact
+        if: always() && steps.plan.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tfplan
+          path: terraform/tfplan.bin
+          retention-days: 7
