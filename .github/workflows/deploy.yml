@@ -73,13 +73,22 @@ jobs:
         run: terraform apply -var-file=environments/prod.tfvars -auto-approve
 
       - name: Deploy Lambda code
-        # Loop sobre os zips gerados. No-op enquanto nao houver collector
-        # com bundle gerado em collectors/*/dist/function.zip.
+        # Loop sobre os zips gerados. Mapping dirname → Lambda function name
+        # explicito porque os nomes das Lambdas em prod NAO seguem o padrao
+        # `fiscal-digital-collector-${dirname}-prod`:
+        #   - querido-diario → `fiscal-digital-collector-prod` (preservado do
+        #     monorepo original; cutover α exige match bit-perfect)
+        #   - supplier → `fiscal-digital-supplier-collector-prod` (criado novo)
+        # Adicionar entry para cada novo collector no case statement abaixo.
         run: |
           shopt -s nullglob
           for zip in collectors/*/dist/function.zip ; do
             name=$(basename "$(dirname "$(dirname "$zip")")")
-            fn="fiscal-digital-collector-${name}-prod"
+            case "$name" in
+              querido-diario) fn="fiscal-digital-collector-prod" ;;
+              supplier) fn="fiscal-digital-supplier-collector-prod" ;;
+              *) fn="fiscal-digital-collector-${name}-prod" ;;
+            esac
             echo "::group::deploy ${fn}"
             aws lambda update-function-code \
               --function-name "$fn" \
