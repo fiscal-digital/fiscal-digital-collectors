@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # TEMP: ver comentario em plan.yml. Lock regenerado em follow-up PR.
+        # FOLLOW-UP: idem plan.yml — restaurar `npm ci` apos regen do lock.
         run: npm install --no-audit --no-fund
 
       - name: Build collectors
@@ -56,31 +56,25 @@ jobs:
           done
 
       - name: Configure AWS credentials (OIDC)
-        if: false  # aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Setup Terraform
-        if: false  # idem
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform Init
-        # Enquanto o backend S3 nao for configurado (PR 3), pulamos init/apply.
-        if: false
         working-directory: terraform
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform Apply
-        if: false
         working-directory: terraform
         run: terraform apply -var-file=environments/prod.tfvars -auto-approve
 
       - name: Deploy Lambda code
-        if: false  # No-op no bootstrap; PR 3 re-habilita com Querido Diario
-        # Loop sobre os zips gerados. No-op no bootstrap (nenhum collector
-        # ainda — primeiro vira no PR 3 com Querido Diario).
+        # Loop sobre os zips gerados. No-op enquanto nao houver collector
+        # com bundle gerado em collectors/*/dist/function.zip.
         run: |
           shopt -s nullglob
           for zip in collectors/*/dist/function.zip ; do
