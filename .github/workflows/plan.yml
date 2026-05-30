@@ -34,7 +34,12 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm ci
+        # TEMP: usando `npm install` (em vez de `npm ci`) porque o package-lock.json
+        # foi gerado quando @fiscal-digital/engine@0.1.0 era restricted — agora 0.1.1
+        # eh public mas o lock pinava 0.1.0. Diego: regerar lock localmente com
+        # `gh auth refresh --scopes read:packages` + `npm install` + commit, depois
+        # restaurar `npm ci`.
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
