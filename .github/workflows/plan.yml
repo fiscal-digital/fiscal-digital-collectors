@@ -34,11 +34,12 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # TEMP: usando `npm install` (em vez de `npm ci`) porque o package-lock.json
-        # foi gerado quando @fiscal-digital/engine@0.1.0 era restricted — agora 0.1.1
-        # eh public mas o lock pinava 0.1.0. Diego: regerar lock localmente com
-        # `gh auth refresh --scopes read:packages` + `npm install` + commit, depois
-        # restaurar `npm ci`.
+        # FOLLOW-UP: restaurar `npm ci` apos regerar package-lock.json com
+        # `@fiscal-digital/engine@0.1.1` resolvido. Regen requer gh CLI local
+        # com scope `read:packages` (Diego: `gh auth refresh --scopes read:packages`
+        # + `rm package-lock.json node_modules && npm install` + commit).
+        # No CI o GITHUB_TOKEN ja tem read:packages para o proprio repo via
+        # grant "Manage Actions access", entao `npm install` funciona aqui.
         run: npm install --no-audit --no-fund
 
       - name: Lint
@@ -59,59 +60,77 @@ jobs:
       # com lint + typecheck + test (acima); pipeline terraform fica para
       # PR interno. Ver LRN-20260523-003 no monorepo.
       - name: Configure AWS credentials (OIDC)
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Setup Terraform
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: hashicorp/setup-terraform@v4
 
       - name: Terraform fmt check
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
-        run: terraform init -backend=false
+        run: terraform init -input=false
 
       - name: Terraform Validate
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: terraform validate
 
       - name: Setup tflint
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
 
       - name: Run tflint
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
         working-directory: terraform
         run: |
           tflint --init
           tflint --recursive --format=compact --minimum-failure-severity=error
 
       - name: Run checkov
-        if: false  # AWS pipeline aguarda OIDC trust + AWS_ROLE_ARN secret (TODOs do PR 3)
+        # skip_check espelha o monorepo fiscal-digital — TODO de hardening progressivo.
+        # Resources afetados: Lambdas (code-signing), CloudWatch log groups (KMS encrypt,
+        # retention 1y). Sincronizar com lista do monorepo quando ele remover algum.
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: terraform
           framework: terraform
           quiet: true
           soft_fail: false
+          skip_check: >-
+            CKV_AWS_18,
+            CKV_AWS_21,
+            CKV_AWS_28,
+            CKV_AWS_50,
+            CKV_AWS_68,
+            CKV_AWS_86,
+            CKV_AWS_115,
+            CKV_AWS_116,
+            CKV_AWS_117,
+            CKV_AWS_144,
+            CKV_AWS_145,
+            CKV_AWS_158,
+            CKV_AWS_173,
+            CKV_AWS_258,
+            CKV_AWS_259,
+            CKV_AWS_272,
+            CKV_AWS_289,
+            CKV_AWS_290,
+            CKV_AWS_300,
+            CKV_AWS_305,
+            CKV_AWS_310,
+            CKV_AWS_338,
+            CKV_AWS_355,
+            CKV_AWS_374,
+            CKV2_AWS_32,
+            CKV2_AWS_34
 
       - name: Terraform Plan
         id: plan
-        # Enquanto o backend S3 nao for configurado (PR 3), pulamos plan.
-        # O step continua aqui pronto para ativar — basta descomentar
-        # backend "s3" em terraform/backend.tf e remover este `if false`.
-        if: false
         working-directory: terraform
         run: |
           set -o pipefail
