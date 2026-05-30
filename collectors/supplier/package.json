@@ -1,0 +1,31 @@
+{
+  "name": "@fiscal-digital/collector-supplier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Collector de fornecedores (BrasilAPI RFB + CGU CEIS/CNEP) — Fiscal Digital",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --external:@aws-sdk/*",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@aws-lambda-powertools/logger": "^2.33.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@fiscal-digital/engine": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^6.0.0"
+  }
+}
