@@ -9,3 +9,9 @@ variable "environment" {
   description = "Ambiente (prod, staging). Usado em tags e nomes de recurso."
   default     = "prod"
 }
+
+variable "cgu_secret_arn" {
+  type        = string
+  description = "ARN do Secret com a chave-api-dados do Portal da Transparencia (CGU). Pode ser vazio em ambientes sem CGU."
+  default     = ""
+}
