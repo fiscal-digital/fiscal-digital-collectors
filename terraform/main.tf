@@ -53,6 +53,11 @@ locals {
   gazettes_queue_arn        = "arn:aws:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:fiscal-digital-gazettes-queue-prod"
   gazettes_queue_url        = "https://sqs.${var.aws_region}.amazonaws.com/${data.aws_caller_identity.current.account_id}/fiscal-digital-gazettes-queue-prod"
   gazettes_cache_bucket_arn = "arn:aws:s3:::fiscal-digital-gazettes-cache-prod"
+
+  # Supplier collector (MIT-02 / EVO-002) — tabelas DDB gerenciadas pelo monorepo.
+  suppliers_table_arn = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/fiscal-digital-suppliers-prod"
+  alerts_table_arn    = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/fiscal-digital-alerts-prod"
+
   # KMS alias — resolvido via data source para evitar hardcoding do key UUID.
 }
 
@@ -69,4 +74,19 @@ module "querido_diario" {
   gazettes_queue_url        = local.gazettes_queue_url
   gazettes_cache_bucket_arn = local.gazettes_cache_bucket_arn
   kms_key_arn               = data.aws_kms_alias.prod.target_key_arn
+}
+
+# ─── Supplier collector ─────────────────────────────────────────────────────
+# MIT-02 / EVO-002 — Lambda novo (nasce neste repo, sem cutover do monorepo).
+# Tabelas DDB sao gerenciadas pelo monorepo; aqui so consumimos via ARN.
+# CGU secret ARN: passado via var (mantem repo OSS sem expor account id).
+
+module "supplier" {
+  source              = "./modules/supplier"
+  environment         = var.environment
+  aws_region          = var.aws_region
+  suppliers_table_arn = local.suppliers_table_arn
+  alerts_table_arn    = local.alerts_table_arn
+  cgu_secret_arn      = var.cgu_secret_arn
+  kms_key_arn         = data.aws_kms_alias.prod.target_key_arn
 }
