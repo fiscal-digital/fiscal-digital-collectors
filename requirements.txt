@@ -1,0 +1,4 @@
+# CI-only Python dependencies for terraform security scanning.
+# Used by .github/workflows/plan.yml step "Install checkov".
+# setup-python@v5 with cache:pip uses this file's hash as cache key.
+checkov==3.2.500
