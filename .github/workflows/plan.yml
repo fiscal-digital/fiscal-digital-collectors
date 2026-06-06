@@ -96,9 +96,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install checkov
-        run: pip install 'checkov==3.2.500'
+        run: pip install -r requirements.txt
 
       - name: Run checkov
         # skip_check espelha o monorepo fiscal-digital — TODO de hardening progressivo.
