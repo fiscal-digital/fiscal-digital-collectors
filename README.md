@@ -81,6 +81,31 @@ algoritmo, verificabilidade publica) vivem la.
 - **Logs estruturados:** JSON com ID de execucao obrigatorio
 - **Sempre citar a fonte:** todo dado normalizado preserva URL canonica da fonte original
 
+### Manutencao
+
+#### Regenerar `package-lock.json`
+
+O workflow `regenerate-lock.yml` regenera o lock do zero dentro do CI
+(sem depender de token local do Diego) e abre um PR para revisao humana.
+
+**Quando usar:** apos publicar nova versao do `@fiscal-digital/engine` no
+GitHub Packages, especialmente quando a versao anterior estava restrita e
+a nova foi publicada como `public` — o lock pode referenciar resolucao
+incompativel com `npm ci`.
+
+```bash
+# Disparar manualmente
+gh workflow run regenerate-lock.yml \
+  --repo fiscal-digital/fiscal-digital-collectors
+
+# Acompanhar execucao
+gh run list --repo fiscal-digital/fiscal-digital-collectors \
+  --workflow=regenerate-lock.yml --limit 5
+```
+
+Apos o workflow abrir o PR de lock, revisar + mergear normalmente.
+O gate `plan.yml` valida que `npm ci` passa com o novo lock antes do merge.
+
 ### Licenca
 
 MIT — ver [LICENSE](LICENSE).
