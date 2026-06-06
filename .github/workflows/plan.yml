@@ -34,13 +34,7 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # FOLLOW-UP: restaurar `npm ci` apos regerar package-lock.json com
-        # `@fiscal-digital/engine@0.1.1` resolvido. Regen requer gh CLI local
-        # com scope `read:packages` (Diego: `gh auth refresh --scopes read:packages`
-        # + `rm package-lock.json node_modules && npm install` + commit).
-        # No CI o GITHUB_TOKEN ja tem read:packages para o proprio repo via
-        # grant "Manage Actions access", entao `npm install` funciona aqui.
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
