@@ -1,0 +1,120 @@
+name: Regenerar package-lock.json
+
+# Uso sob demanda:
+#   gh workflow run regenerate-lock.yml --repo fiscal-digital/fiscal-digital-collectors
+#
+# Se houver mudanca no lock, o workflow abre um PR automaticamente para
+# revisao humana antes de mergear.
+
+on:
+  workflow_dispatch:
+
+  # schedule:
+  #   # Descomentar para rodar semanalmente (domingo 05:00 UTC = 02:00 BRT).
+  #   # Util para manter o lock fresco apos atualizacoes regulares do engine.
+  #   # Nao ativa agora — habilitar quando o ciclo de publicacao do engine
+  #   # for mais frequente (meta: publicar @fiscal-digital/engine a cada sprint).
+  #   - cron: '0 5 * * 0'
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@fiscal-digital'
+
+      - name: Regenerar lock do zero
+        # LRN-20260509-001: npm install --force NAO recalcula resolucao quando
+        # override e adicionado; `rm` do lock + node_modules garante regen limpo.
+        # O GITHUB_TOKEN em workflows do proprio org tem read:packages por padrao
+        # via "Manage Actions access" — nao precisa de PAT.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --no-audit --no-fund
+
+      - name: Validar build apos regen
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+
+      - name: Verificar se lock mudou
+        id: diff
+        run: |
+          if git diff --quiet package-lock.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Lock inalterado — nenhum PR necessario."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Lock foi atualizado — abrindo PR."
+          fi
+
+      - name: Configurar git identity (bot)
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Criar branch e commitar lock atualizado
+        if: steps.diff.outputs.changed == 'true'
+        id: branch
+        run: |
+          BRANCH="chore/regenerate-lock-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git add package-lock.json
+          git commit -m "chore(deps): regenerate package-lock.json (auto)"
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Abrir PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "chore(deps): regenerate package-lock.json" \
+            --body "$(cat <<'EOF'
+          ## O que muda
+
+          Regeneracao automatica do \`package-lock.json\` disparada via workflow
+          \`regenerate-lock.yml\` (run ${{ github.run_id }}).
+
+          Necessario quando o pacote \`@fiscal-digital/engine\` e republicado no
+          GitHub Packages com nova versao ou mudanca de visibilidade (ex: restricted
+          -> public), tornando o lock anterior incompativel com \`npm ci\`.
+
+          ## Como validar
+
+          1. Checar que \`npm ci\` passa no gate de PR (plan.yml).
+          2. Verificar que a versao do engine no lock bate com a esperada em
+             \`collectors/*/package.json\`.
+
+          ## Apos merge
+
+          O gate \`plan.yml\` pode ser atualizado para restaurar \`npm ci\` no
+          lugar de \`npm install\` (ver comentario FOLLOW-UP em plan.yml).
+          EOF
+          )" \
+            --base main \
+            --head "${{ steps.branch.outputs.branch }}" \
+            --label "dependencies" 2>/dev/null || \
+          gh pr create \
+            --title "chore(deps): regenerate package-lock.json" \
+            --body "Regeneracao automatica do package-lock.json (run ${{ github.run_id }}). Ver workflow regenerate-lock.yml para contexto." \
+            --base main \
+            --head "${{ steps.branch.outputs.branch }}"
