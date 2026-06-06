@@ -16,6 +16,13 @@ const logger = createLogger('supplier-collector:brasilapi')
 
 const BRASIL_API = 'https://brasilapi.com.br/api/cnpj/v1'
 
+// User-Agent identificando o projeto. Cloudflare WAF do BrasilAPI bloqueia
+// IPs do range AWS Lambda quando o request vai sem UA (anti-abuse). Setting
+// um UA descritivo: (a) destrava o request, (b) sinaliza boa cidadania OSS
+// caso o BrasilAPI ops queira contatar o projeto. Sintoma anterior: 403
+// persistente em prod (smoke 2026-06-06 com CNPJ 89982037000176).
+const USER_AGENT = 'fiscal-digital-supplier-collector/0.1 (+https://github.com/fiscal-digital/fiscal-digital-collectors)'
+
 // Rate limit: BrasilAPI free tier ~3 req/s — usamos 350ms por segurança.
 // NODE_ENV=test pula o throttle (testes não precisam esperar).
 const MIN_INTERVAL_MS = 350
@@ -82,7 +89,9 @@ export async function fetchCnpjProfile(cnpj: string): Promise<CnpjFetchResult> {
   await throttle()
 
   try {
-    const res = await fetch(source, { headers: { Accept: 'application/json' } })
+    const res = await fetch(source, {
+      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+    })
 
     if (res.status === 404) {
       return { status: 'nao_encontrado', source }
