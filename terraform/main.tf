@@ -79,7 +79,14 @@ module "querido_diario" {
 # ─── Supplier collector ─────────────────────────────────────────────────────
 # MIT-02 / EVO-002 — Lambda novo (nasce neste repo, sem cutover do monorepo).
 # Tabelas DDB sao gerenciadas pelo monorepo; aqui so consumimos via ARN.
-# CGU secret ARN: passado via var (mantem repo OSS sem expor account id).
+# CGU secret ARN: resolvido via data source (evita expor ARN/hash em vars e
+# garante que prod.tfvars nao precise ser atualizado manualmente).
+
+# CGU Portal da Transparencia secret — criado fora do terraform (rotacao manual,
+# fora do blast radius do CI). Lookup por nome evita expor o ARN/hash em vars.
+data "aws_secretsmanager_secret" "cgu" {
+  name = "fiscaldigital-cgu-prod"
+}
 
 module "supplier" {
   source              = "./modules/supplier"
@@ -87,6 +94,6 @@ module "supplier" {
   aws_region          = var.aws_region
   suppliers_table_arn = local.suppliers_table_arn
   alerts_table_arn    = local.alerts_table_arn
-  cgu_secret_arn      = var.cgu_secret_arn
+  cgu_secret_arn      = data.aws_secretsmanager_secret.cgu.arn
   kms_key_arn         = data.aws_kms_alias.prod.target_key_arn
 }
