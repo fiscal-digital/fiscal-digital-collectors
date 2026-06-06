@@ -81,15 +81,22 @@ jobs:
           git push origin "$BRANCH"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
-      - name: Abrir PR
+      - name: Abrir PR (ou imprimir URL se politica org bloquear)
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Nota: a politica da org fiscal-digital desabilita criacao de PR via
+        # GITHUB_TOKEN de Actions (write permissions bloqueadas no nivel org).
+        # O passo tenta `gh pr create` e, se falhar com o erro conhecido,
+        # imprime a URL de abertura manual para o mantenedor clicar.
+        # Para habilitar criacao automatica: org Settings > Actions > General >
+        # "Allow GitHub Actions to create and approve pull requests".
         run: |
-          gh pr create \
-            --title "chore(deps): regenerate package-lock.json" \
-            --body "$(cat <<'EOF'
-          ## O que muda
+          BRANCH="${{ steps.branch.outputs.branch }}"
+          REPO="fiscal-digital/fiscal-digital-collectors"
+          PR_URL="https://github.com/${REPO}/compare/main...${BRANCH}?expand=1"
+
+          PR_BODY="## O que muda
 
           Regeneracao automatica do \`package-lock.json\` disparada via workflow
           \`regenerate-lock.yml\` (run ${{ github.run_id }}).
@@ -107,14 +114,21 @@ jobs:
           ## Apos merge
 
           O gate \`plan.yml\` pode ser atualizado para restaurar \`npm ci\` no
-          lugar de \`npm install\` (ver comentario FOLLOW-UP em plan.yml).
-          EOF
-          )" \
-            --base main \
-            --head "${{ steps.branch.outputs.branch }}" \
-            --label "dependencies" 2>/dev/null || \
-          gh pr create \
+          lugar de \`npm install\` (ver comentario FOLLOW-UP em plan.yml)."
+
+          if gh pr create \
             --title "chore(deps): regenerate package-lock.json" \
-            --body "Regeneracao automatica do package-lock.json (run ${{ github.run_id }}). Ver workflow regenerate-lock.yml para contexto." \
+            --body "$PR_BODY" \
             --base main \
-            --head "${{ steps.branch.outputs.branch }}"
+            --head "$BRANCH" \
+            --label "dependencies" 2>/dev/null; then
+            echo "PR aberto com sucesso."
+          else
+            echo ""
+            echo "::warning::Politica da org bloqueia criacao de PR via Actions."
+            echo "::warning::Abrir PR manualmente em: ${PR_URL}"
+            echo ""
+            echo "Branch com o lock atualizado foi publicado: ${BRANCH}"
+            echo "Abrir PR manualmente:"
+            echo "  ${PR_URL}"
+          fi
