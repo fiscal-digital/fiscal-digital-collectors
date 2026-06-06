@@ -10,6 +10,13 @@ permissions:
   contents: read
   packages: read
 
+# Serializa runs de deploy contra o terraform state remoto (mesmo grupo do
+# plan.yml — PR plan e push deploy não competem pelo lock DynamoDB).
+# cancel-in-progress: false preserva runs em fila.
+concurrency:
+  group: terraform-state-collectors-prod
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
