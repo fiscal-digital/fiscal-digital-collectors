@@ -8,7 +8,7 @@ consumida pelo analyzer no monorepo `fiscal-digital`.
 
 ## Schedule
 
-- **EventBridge cron:** `cron(0 7 * * ? *)` UTC (07:00 UTC = 04:00 BRT)
+- **EventBridge cron:** `cron(0 7 ? * MON-FRI *)` UTC (segunda a sexta, 07:00 UTC = 04:00 BRT). Diarios oficiais raramente publicam fim de semana — auditoria de 14 dias (24/05 a 07/06/2026) confirmou zero ingest em sab/dom.
 - **Source canonica:** https://queridodiario.ok.org.br
 - **Rate limit:** 60 req/min (enforced via SQS)
 

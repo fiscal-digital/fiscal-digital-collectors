@@ -61,15 +61,18 @@ resource "aws_cloudwatch_log_group" "collector" {
   retention_in_days = 30
 }
 
-# ─── EventBridge — schedule diario 07:00 UTC ────────────────────────────────
-# 2026-05-11: retomada do schedule diario. Estrategia atual e coletar todo
-# dia (cobrindo cidades que QD indexar quando indexar), priorizando arquivo
-# completo para reprocessamento futuro sem custo de QD.
+# ─── EventBridge — schedule MON-FRI 07:00 UTC ───────────────────────────────
+# 2026-05-11: retomada do schedule diario.
+# 2026-06-07: alterado para MON-FRI apos auditoria de 14 dias (24/05 a 07/06)
+# que confirmou ZERO ingest em sabados/domingos mesmo nas 5 cidades onde QD
+# ainda indexa (Feira de Santana, Maceio, Niteroi, Serra, Sao Bernardo).
+# Diarios oficiais brasileiros raramente publicam fim de semana. Economiza
+# ~28% de invocacoes Lambda sem perda de cobertura.
 
 resource "aws_cloudwatch_event_rule" "collector_daily" {
   name                = "fiscal-digital-daily-collector-prod"
-  description         = "Aciona o collector diariamente as 07:00 UTC (04:00 BRT)."
-  schedule_expression = "cron(0 7 * * ? *)"
+  description         = "Aciona o collector segunda a sexta as 07:00 UTC (04:00 BRT)."
+  schedule_expression = "cron(0 7 ? * MON-FRI *)"
 }
 
 resource "aws_cloudwatch_event_target" "collector" {
