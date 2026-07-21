@@ -278,9 +278,22 @@ async function cacheExcerptsJson(originalUrl: string, date: string, excerpts: st
   }
 }
 
+// O QD ingere gazettes com atraso (D+1 típico; semanas quando um scraper
+// municipal é consertado e backfilla). `published_since = lastDate` perde para
+// sempre qualquer gazette com data anterior ao watermark que chegue depois.
+// Voltar LOOKBACK_DAYS reprocessa a janela com custo ~zero: gazettes já
+// coletadas são puladas pelo dedup (`isAlreadyQueued`/`markQueued`).
+export const LOOKBACK_DAYS = 14
+
+export function sinceWithLookback(lastDate: string, lookbackDays = LOOKBACK_DAYS): string {
+  const d = new Date(`${lastDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - lookbackDays)
+  return d.toISOString().split('T')[0]
+}
+
 async function getLastDate(territory_id: string): Promise<string> {
   const { data } = await lookupMemory.execute({ pk: `BACKFILL#${territory_id}`, table: GAZETTES_TABLE })
-  if (data?.['lastDate']) return data['lastDate'] as string
+  if (data?.['lastDate']) return sinceWithLookback(data['lastDate'] as string)
 
   // First run: go back 1 day
   const d = new Date()
