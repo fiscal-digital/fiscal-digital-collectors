@@ -1,0 +1,52 @@
+# Sentinela de frescor de coleta (engine#151) — script determinístico, sem LLM.
+# Lê a data real da última gazette por cidade (gazettes-prod, role read-only) e
+# mantém issues neste repo. Custo: ~R$0,02/run de Scan; Actions grátis (público).
+name: Sentinela de frescor
+
+on:
+  schedule:
+    # 09:30 UTC seg-sex — ~2h30 depois do cron de coleta (07:00 UTC MON-FRI).
+    - cron: "30 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Só imprime o retrato, não toca issues"
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # OIDC → fiscal-digital-sentinel-ro (read-only)
+  issues: write   # criar/fechar issues da sentinela
+  contents: read
+
+concurrency:
+  group: sentinel-freshness
+  cancel-in-progress: false
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Testes da lógica pura
+        run: node --test scripts/sentinel-freshness.test.mjs
+
+      - name: Credenciais AWS (role read-only)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_SENTINEL_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Rodar sentinela
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sentinel-freshness.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
