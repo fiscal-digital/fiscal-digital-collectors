@@ -17,8 +17,6 @@
 // Uso local (dry-run, não toca issues):
 //   node scripts/sentinel-freshness.mjs --dry-run
 
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { execFileSync } from 'node:child_process'
 
 const TABLE = process.env.GAZETTES_TABLE ?? 'fiscal-digital-gazettes-prod'
@@ -157,20 +155,20 @@ export function renderAggregate(rows, todayISO) {
 
 // ── I/O (fino de propósito) ──────────────────────────────────────────────────
 
+// Scan via AWS CLI (pré-instalado no runner e paginado automaticamente) em vez
+// de SDK: mantém o workflow SEM npm install — o repo depende de
+// @fiscal-digital/engine no GitHub Packages, que exigiria auth de registry só
+// para esta leitura. `--query` reduz o output a um array de strings de pk.
 async function scanPks() {
-  const doc = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }))
-  const pks = []
-  let ExclusiveStartKey
-  do {
-    const r = await doc.send(new ScanCommand({
-      TableName: TABLE,
-      ProjectionExpression: 'pk',
-      ExclusiveStartKey,
-    }))
-    for (const it of r.Items ?? []) pks.push(it.pk)
-    ExclusiveStartKey = r.LastEvaluatedKey
-  } while (ExclusiveStartKey)
-  return pks
+  const out = execFileSync('aws', [
+    'dynamodb', 'scan',
+    '--table-name', TABLE,
+    '--projection-expression', 'pk',
+    '--query', 'Items[].pk.S',
+    '--output', 'json',
+    '--region', REGION,
+  ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  return JSON.parse(out)
 }
 
 function gh(args, input) {

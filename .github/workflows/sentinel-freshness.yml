@@ -34,9 +34,9 @@ jobs:
         with:
           node-version: 24
 
-      - name: Instalar dependências
-        run: npm install --no-audit --no-fund
-
+      # Sem npm install de propósito: o script usa só node builtin + AWS CLI do
+      # runner. O repo depende de @fiscal-digital/engine (GitHub Packages), que
+      # exigiria auth de registry só para esta leitura.
       - name: Testes da lógica pura
         run: node --test scripts/sentinel-freshness.test.mjs
 
