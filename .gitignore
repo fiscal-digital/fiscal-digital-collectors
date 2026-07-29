@@ -36,7 +36,6 @@ auth.json
 
 # --- Terraform ------------------------------------------------------
 .terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 # tfvars de ambiente (prod.tfvars) SAO versionados — usados pelo CI.
