@@ -38,7 +38,12 @@ export interface CollectorConfig {
 
 export async function runCollector(config: CollectorConfig): Promise<{ processed: number; sent: number }> {
   const { territory_id } = config
-  const since = config.since ?? await getLastDate(territory_id)
+  // Watermark cru lido UMA vez: alimenta o `since` (com lookback) e é preservado
+  // no save final quando o run não persiste nada (saveMemory é Put/replace —
+  // sem isso, um run vazio apagaria o lastDate real da cidade).
+  const prevLastDate = await getWatermarkLastDate(territory_id)
+  const since = config.since ??
+    (prevLastDate ? sinceWithLookback(prevLastDate) : defaultFirstRunSince())
   const until = new Date().toISOString().split('T')[0]
 
   logger.info('coletando', { territory_id, since, until })
@@ -46,6 +51,7 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
   let offset = 0
   let processed = 0
   let sent = 0
+  let maxPersistedDate: string | null = null
   const pageSize = 50
 
   while (true) {
@@ -97,7 +103,11 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
       }))
 
       const queued = await markQueued(key, gazette.url, gazette.date, cachedPdfUrl, gazette.id, gazette.excerpts)
-      if (queued) sent++
+      if (queued) {
+        sent++
+        // collectors#21: o watermark avança pela data REAL persistida, não pelo run
+        if (!maxPersistedDate || gazette.date > maxPersistedDate) maxPersistedDate = gazette.date
+      }
       else processed-- // já existia (race) — não conta como processado novo
     }
 
@@ -105,11 +115,19 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
     if (offset >= total) break
   }
 
-  // Update last processed date
+  // collectors#21 — watermark veraz: `lastDate` só avança quando o run
+  // persistiu gazette (data real, nunca `until`); `lastAttemptedAt` registra a
+  // tentativa para observabilidade. O item é Put/replace, então o lastDate
+  // anterior é reescrito explicitamente quando não há avanço.
+  const lastDate = nextWatermark(prevLastDate, maxPersistedDate)
   await saveMemory.execute({
     pk: `BACKFILL#${territory_id}`,
     table: GAZETTES_TABLE,
-    item: { lastDate: until, updatedAt: new Date().toISOString() },
+    item: {
+      ...(lastDate && { lastDate }),
+      lastAttemptedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
   })
 
   return { processed, sent }
@@ -291,10 +309,36 @@ export function sinceWithLookback(lastDate: string, lookbackDays = LOOKBACK_DAYS
   return d.toISOString().split('T')[0]
 }
 
-async function getLastDate(territory_id: string): Promise<string> {
-  const { data } = await lookupMemory.execute({ pk: `BACKFILL#${territory_id}`, table: GAZETTES_TABLE })
-  if (data?.['lastDate']) return sinceWithLookback(data['lastDate'] as string)
+/**
+ * Novo lastDate do watermark após um run COMPLETO (collectors#21).
+ *
+ * Semântica: `lastDate` = data real da última gazette PERSISTIDA — nunca a data
+ * do run. O bug anterior gravava `until` (hoje) incondicionalmente: 41 das 50
+ * cidades divergiam do dado real e 9 tinham watermark sem nenhuma gazette; o
+ * site (`/cities` lê este mesmo item) exibiria "atualizada" para cidade parada.
+ *
+ * Regras:
+ *  - run sem persistência → mantém o anterior (não avança, não regride)
+ *  - nunca regride: gazette antiga capturada pelo lookback não puxa o watermark
+ *    para trás
+ * Só é chamada após a paginação completa — timeout/erro no meio aborta antes do
+ * save e o próximo run repete a janela (idempotente via dedup).
+ */
+export function nextWatermark(
+  previousLastDate: string | null,
+  maxPersistedDate: string | null,
+): string | null {
+  if (maxPersistedDate === null) return previousLastDate
+  if (previousLastDate === null) return maxPersistedDate
+  return maxPersistedDate > previousLastDate ? maxPersistedDate : previousLastDate
+}
 
+async function getWatermarkLastDate(territory_id: string): Promise<string | null> {
+  const { data } = await lookupMemory.execute({ pk: `BACKFILL#${territory_id}`, table: GAZETTES_TABLE })
+  return (data?.['lastDate'] as string | undefined) ?? null
+}
+
+function defaultFirstRunSince(): string {
   // First run: go back 1 day
   const d = new Date()
   d.setDate(d.getDate() - 1)
