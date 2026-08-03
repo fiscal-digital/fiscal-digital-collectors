@@ -6,7 +6,7 @@ jest.mock('@fiscal-digital/engine', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }))
 
-import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark } from '../collector'
+import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark, cityIdFromGazetteKey } from '../collector'
 
 describe('sinceWithLookback', () => {
   it('volta LOOKBACK_DAYS a partir do watermark', () => {
@@ -53,5 +53,27 @@ describe('nextWatermark', () => {
 
   it('NUNCA regride: gazette antiga capturada pelo lookback não puxa para trás', () => {
     expect(nextWatermark('2026-07-25', '2026-07-14')).toBe('2026-07-25')
+  })
+})
+
+describe('cityIdFromGazetteKey', () => {
+  // Alimenta o counter `AGG#GAZETTE_COUNT#{cityId}` que a API lê em
+  // /cities/{cityId}/stats. Precisa casar EXATAMENTE com o universo que o
+  // Scan antigo contava (`begins_with(pk, 'GAZETTE#{cityId}#')`), senão o
+  // counter e o fallback de Scan passam a divergir em silêncio.
+  it('extrai o territory_id de chave do Querido Diario', () => {
+    expect(cityIdFromGazetteKey('4305108#2026-03-15#a1b2c3')).toBe('4305108')
+    expect(cityIdFromGazetteKey('3550308#2021-01-04#deadbeef')).toBe('3550308')
+  })
+
+  it('retorna null para chave URLHASH — nao pertence a cidade nenhuma', () => {
+    // Sem isso criariamos um counter fantasma com pk AGG#GAZETTE_COUNT#URLHASH,
+    // e as gazettes nao-QD seriam contadas numa "cidade" inexistente.
+    expect(cityIdFromGazetteKey('URLHASH#0123456789abcdef0123456789abcdef')).toBeNull()
+  })
+
+  it('retorna null quando o primeiro segmento nao e numerico', () => {
+    expect(cityIdFromGazetteKey('caxias#2026-03-15#a1b2')).toBeNull()
+    expect(cityIdFromGazetteKey('')).toBeNull()
   })
 })

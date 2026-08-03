@@ -403,5 +403,75 @@ async function markQueued(
   } catch (err) {
     logger.warn('counter increment failed', { err: (err as Error).message })
   }
+  await bumpCityCounter(key, date)
   return true
+}
+
+/**
+ * Extrai o territory_id da chave de gazette.
+ *
+ * Deriva do MESMO lugar que o `begins_with(pk, 'GAZETTE#{cityId}#')` que a API
+ * usava — se derivássemos de `gazette.territory_id`, counter e scan poderiam
+ * divergir quando o QD devolve um territory_id diferente do que está na URL.
+ *
+ * `gazetteKey` tem duas formas: `{territory_id}#{date}#{hash}` para URLs do QD
+ * e `URLHASH#{sha256}` para o resto. A segunda não pertence a cidade nenhuma
+ * sob esse critério, então retorna `null` — do contrário criaríamos um counter
+ * fantasma com pk `AGG#GAZETTE_COUNT#URLHASH`.
+ */
+export function cityIdFromGazetteKey(key: string): string | null {
+  const first = key.split('#')[0]
+  return /^\d+$/.test(first) ? first : null
+}
+
+/**
+ * Mantém o agregado por cidade lido por `/cities/{cityId}/stats`.
+ *
+ * O endpoint fazia Scan da tabela inteira (47.720 itens / 94 MB) porque `pk` é
+ * a chave HASH e `begins_with` sobre ela não vira Query — levava 2,8–3,3 s para
+ * devolver 288 bytes. Este counter troca isso por 1 GetItem.
+ *
+ * São até 3 UpdateItem porque o DynamoDB não tem `min`/`max` em
+ * UpdateExpression: o ADD do total precisa ser incondicional (se viesse junto
+ * de uma condição de data, um item que não é novo mínimo/máximo perderia a
+ * contagem), e cada extremo tem sua própria condição. Best-effort como o
+ * counter global: falha aqui não desfaz o Put, e o
+ * `scripts/reconcile-gazette-counters.mjs` reconcilia.
+ */
+async function bumpCityCounter(key: string, date: string): Promise<void> {
+  const cityId = cityIdFromGazetteKey(key)
+  if (!cityId) return
+  const pk = `AGG#GAZETTE_COUNT#${cityId}`
+  const now = new Date().toISOString()
+
+  try {
+    await ddb.send(new UpdateCommand({
+      TableName: GAZETTES_TABLE,
+      Key: { pk },
+      UpdateExpression: 'ADD #t :one SET updatedAt = :ts',
+      ExpressionAttributeNames: { '#t': 'total' },
+      ExpressionAttributeValues: { ':one': 1, ':ts': now },
+    }))
+  } catch (err) {
+    logger.warn('city counter increment failed', { cityId, err: (err as Error).message })
+    return
+  }
+
+  // ConditionalCheckFailed aqui é o caso NORMAL (a data não é novo extremo).
+  for (const [attr, cmp] of [['firstDate', '>'], ['lastDate', '<']] as const) {
+    try {
+      await ddb.send(new UpdateCommand({
+        TableName: GAZETTES_TABLE,
+        Key: { pk },
+        UpdateExpression: `SET #a = :d`,
+        ConditionExpression: `attribute_not_exists(#a) OR #a ${cmp} :d`,
+        ExpressionAttributeNames: { '#a': attr },
+        ExpressionAttributeValues: { ':d': date },
+      }))
+    } catch (err) {
+      if ((err as { name?: string })?.name !== 'ConditionalCheckFailedException') {
+        logger.warn('city counter date update failed', { cityId, attr, err: (err as Error).message })
+      }
+    }
+  }
 }
