@@ -58,6 +58,11 @@ jobs:
       - name: Logica pura do diagnostico de coleta
         run: node --test scripts/diagnose-collection.test.mjs
 
+      # A camada raw e imutavel e alimentada 1x — parse errado grava lixo
+      # PERMANENTE no S3 do qual todo processamento futuro deriva.
+      - name: Logica pura do ingestor de pacotes /aggregates
+        run: node --test scripts/ingest-aggregates.test.mjs
+
       - name: Build (no-op enquanto nao houver collector)
         run: npm run build
 
