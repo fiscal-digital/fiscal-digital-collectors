@@ -51,6 +51,13 @@ jobs:
       - name: Test
         run: npm test
 
+      # `npm test` (jest) nao alcanca scripts/*.mjs. A classificacao do
+      # diagnostico decide se cidade estagnada vira trabalho de engenharia ou
+      # nao — classificar errado manda investigar collector quando a fonte e
+      # que secou. Ver o teste de regressao de rate limit no arquivo.
+      - name: Logica pura do diagnostico de coleta
+        run: node --test scripts/diagnose-collection.test.mjs
+
       - name: Build (no-op enquanto nao houver collector)
         run: npm run build
 
