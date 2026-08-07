@@ -31,6 +31,33 @@ const KEYWORDS = [
   'tomada de preços',
 ]
 
+interface GazetteLike {
+  id: string
+  territory_id: string
+  date: string
+  url: string
+  excerpts: string[]
+}
+
+// Fase 0 da camada raw: com o JSON de excerpts garantido no S3, a mensagem
+// leva so o ponteiro (tamanho constante; texto integral estoura os 256 KB do
+// SQS em ~2% dos diarios). Sem a garantia, excerpts inline — o analyzer
+// aceita os dois (#174) e falha com retry/DLQ (#176).
+export function buildCollectorMessage(
+  gazette: GazetteLike,
+  entities: CollectorMessage['entities'],
+  excerptsS3Key: string | null,
+): CollectorMessage {
+  return {
+    gazetteId: gazette.id,
+    territory_id: gazette.territory_id,
+    date: gazette.date,
+    url: gazette.url,
+    ...(excerptsS3Key ? { excerptsS3Key } : { excerpts: gazette.excerpts }),
+    entities,
+  }
+}
+
 export interface CollectorConfig {
   territory_id: string
   since?: string   // override; defaults to last processed date
@@ -83,16 +110,9 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
       // persistência redundante elimina round-trips ao QD para reprocessamento.
       const cachedPdfUrl = await cachePdf(gazette.territory_id, gazette.id, gazette.url)
       await cacheTxt(gazette.url, text)
-      await cacheExcerptsJson(gazette.url, gazette.date, gazette.excerpts)
+      const excerptsS3Key = await cacheExcerptsJson(gazette.url, gazette.date, gazette.excerpts)
 
-      const msg: CollectorMessage = {
-        gazetteId: gazette.id,
-        territory_id: gazette.territory_id,
-        date: gazette.date,
-        url: gazette.url,
-        excerpts: gazette.excerpts,
-        entities,
-      }
+      const msg: CollectorMessage = buildCollectorMessage(gazette, entities, excerptsS3Key)
 
       await sqs.send(new SendMessageCommand({
         QueueUrl: QUEUE_URL,
@@ -263,12 +283,15 @@ async function cacheTxt(originalUrl: string, text: string): Promise<void> {
  * Diferença do DDB excerpts: S3 é write-once cold storage (Glacier após 181d
  * via lifecycle), DDB é hot path. Redundância vale o custo: ~80GB cold = R$ 4/mês.
  */
-async function cacheExcerptsJson(originalUrl: string, date: string, excerpts: string[]): Promise<void> {
+// Retorna a chave S3 quando o JSON esta garantido la (escrito agora ou ja
+// existente) — e o que permite enviar a mensagem por ponteiro. null = mandar
+// excerpts inline (fallback).
+async function cacheExcerptsJson(originalUrl: string, date: string, excerpts: string[]): Promise<string | null> {
   const pdfKey = pdfCacheS3Key(originalUrl)
-  if (!pdfKey || !excerpts || excerpts.length === 0) return
+  if (!pdfKey || !excerpts || excerpts.length === 0) return null
   const key = `excerpts/${pdfKey.replace(/\.pdf$/i, '')}.json`
 
-  if (await s3ObjectExists(key)) return
+  if (await s3ObjectExists(key)) return key
 
   const body = {
     originalUrl,
@@ -291,8 +314,10 @@ async function cacheExcerptsJson(originalUrl: string, date: string, excerpts: st
       },
     }))
     logger.info('excerpts json cached', { key, count: excerpts.length })
+    return key
   } catch (err) {
     logger.warn('excerpts json cache error', { key, err })
+    return null
   }
 }
 
