@@ -6,7 +6,7 @@ jest.mock('@fiscal-digital/engine', () => ({
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }))
 
-import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark, cityIdFromGazetteKey } from '../collector'
+import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark, cityIdFromGazetteKey, buildCollectorMessage } from '../collector'
 
 describe('sinceWithLookback', () => {
   it('volta LOOKBACK_DAYS a partir do watermark', () => {
@@ -75,5 +75,28 @@ describe('cityIdFromGazetteKey', () => {
   it('retorna null quando o primeiro segmento nao e numerico', () => {
     expect(cityIdFromGazetteKey('caxias#2026-03-15#a1b2')).toBeNull()
     expect(cityIdFromGazetteKey('')).toBeNull()
+  })
+})
+
+describe('buildCollectorMessage', () => {
+  const gazette = {
+    id: 'g-1', territory_id: '4305108', date: '2026-08-01',
+    url: 'https://data.qd.org/4305108/2026-08-01/abc.pdf',
+    excerpts: ['dispensa de licitação nº 42'],
+  }
+  const entities = { cnpjs: [], values: [], dates: [], contractNumbers: [] }
+
+  it('com JSON garantido no S3, envia SO o ponteiro — nunca os dois', () => {
+    const msg = buildCollectorMessage(gazette, entities, 'excerpts/4305108/2026-08-01/abc.json')
+    expect(msg.excerptsS3Key).toBe('excerpts/4305108/2026-08-01/abc.json')
+    // REGRESSÃO: inline junto com ponteiro reintroduziria o limite de 256 KB
+    // que a Fase 0 elimina.
+    expect(msg).not.toHaveProperty('excerpts')
+  })
+
+  it('sem garantia do S3 (null), cai para excerpts inline', () => {
+    const msg = buildCollectorMessage(gazette, entities, null)
+    expect(msg.excerpts).toEqual(['dispensa de licitação nº 42'])
+    expect(msg).not.toHaveProperty('excerptsS3Key')
   })
 })
