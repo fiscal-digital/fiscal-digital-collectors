@@ -27,7 +27,7 @@
 
 import { execFileSync } from 'node:child_process'
 
-const QD_API = 'https://api.queridodiario.ok.org.br'
+const QD_API = process.env.QD_API_URL ?? 'https://api.queridodiario.org.br' // host migrado em 2026-08 (engine#fix/qd-api-host)
 const USER_AGENT = 'FiscalDigital/0.1.1 (+https://fiscaldigital.org)'
 const TABLE = process.env.GAZETTES_TABLE ?? 'fiscal-digital-gazettes-prod'
 const REGION = process.env.AWS_REGION ?? 'us-east-1'

@@ -55,7 +55,7 @@ const require = createRequire(import.meta.url)
 const { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3')
 const { CITIES } = require('@fiscal-digital/engine')
 
-const QD_API = 'https://api.queridodiario.ok.org.br'
+const QD_API = process.env.QD_API_URL ?? 'https://api.queridodiario.org.br' // host migrado em 2026-08 (engine#fix/qd-api-host)
 const USER_AGENT = 'FiscalDigital/0.1.1 (+https://fiscaldigital.org)'
 const BUCKET = process.env.GAZETTES_CACHE_BUCKET ?? 'fiscal-digital-gazettes-cache-prod'
 export const MANIFEST_SCHEMA_VERSION = 1
