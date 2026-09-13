@@ -34,7 +34,7 @@ terraform/
   variables.tf
   backend.tf
   environments/prod.tfvars
-  modules/<source>/         # criados por PR a partir do PR 3
+  modules/<source>/         # um por collector (hoje: querido-diario, supplier)
 .github/workflows/
   plan.yml                  # gate de PR (lint + typecheck + test + tf valida)
   deploy.yml                # apply + update Lambda code em main
@@ -45,8 +45,8 @@ sources/
 ### Como adicionar um collector novo
 
 1. `mkdir -p collectors/<nome>/src/__tests__`
-2. Criar `collectors/<nome>/package.json` no padrao do monorepo (ex:
-   `fiscal-digital/packages/collector/package.json`). Nome do pacote:
+2. Criar `collectors/<nome>/package.json` espelhando um collector existente
+   (ex: `collectors/querido-diario/package.json`). Nome do pacote:
    `@fiscal-digital/collector-<nome>`. Adicionar `@fiscal-digital/engine`
    como dependency (versao `^0.x` — semver, NAO `*`).
 3. Criar `collectors/<nome>/tsconfig.json` estendendo `../../tsconfig.json`.
@@ -73,7 +73,7 @@ sources/
 - AWS Lambda agendada via EventBridge
 - DynamoDB para cache de respostas idempotentes
 - SQS para rate limiting
-- Terraform com estado remoto (sera configurado no PR 3 quando primeiro collector for migrado)
+- Terraform com estado remoto (configurado — ver `terraform/backend.tf`)
 - Jest 30 + ts-jest para testes
 - esbuild para bundle Lambda
 

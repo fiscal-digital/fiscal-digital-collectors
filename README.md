@@ -10,7 +10,7 @@
 [fiscaldigital.org](https://fiscaldigital.org) · [@FiscalDigitalBR](https://x.com/FiscalDigitalBR)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Bootstrap](https://img.shields.io/badge/Status-Bootstrap-blue.svg)]()
+[![Status: Producao](https://img.shields.io/badge/Status-Produ%C3%A7%C3%A3o-green.svg)]()
 [![Brand: CC BY 4.0](https://img.shields.io/badge/Brand-CC%20BY%204.0-blue.svg)](https://github.com/fiscal-digital/fiscal-digital-web/tree/main/brand)
 
 ---
@@ -23,21 +23,22 @@ formato consumido pela engine de fiscalizacao
 
 ### Status
 
-**Bootstrap concluido** (PR 2/7 do conjunto MIT-02/EVO-002). Workspace TypeScript
-configurado, gates de CI (lint, typecheck, test, terraform fmt/validate/tflint/checkov)
-ativos. Nenhum collector implementado ainda neste repo — Querido Diario sera
-migrado em PR 3, supplier-collector (RFB + CGU) nasce em PR 5.
+**Em producao.** Os dois collectors rodam como Lambdas agendadas por EventBridge
+e sao deployados por este repo. A migracao a partir de
+`fiscal-digital/packages/collector/` esta concluida — aquele diretorio nao
+existe mais no monorepo.
 
-Ate la, a implementacao em producao do collector Querido Diario continua em
-[`fiscal-digital/packages/collector/`](https://github.com/fiscal-digital/fiscal-digital/tree/main/packages/collector)
-(Lambda agendada via EventBridge, pipeline diario 07:00 UTC).
+### Collectors
 
-### Collectors planejados
-
-| Path | Fonte | Status | Origem |
+| Path | Fonte | Lambda em prod | Agendamento |
 |---|---|---|---|
-| `collectors/querido-diario/` | [Querido Diario](https://queridodiario.ok.org.br) (OKFN BR) | Migra no PR 3 | Hoje em `fiscal-digital/packages/collector/` |
-| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | Nasce no PR 5 | Skill `check_sanctions.ts` no engine + novo adapter RFB |
+| `collectors/querido-diario/` | [Querido Diario](https://queridodiario.ok.org.br) (OKFN BR) | `fiscal-digital-collector-prod` | 07:00 UTC, seg-sex |
+| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | `fiscal-digital-supplier-collector-prod` | 08:00 UTC, diario |
+
+Cobertura atual: 50 cidades. A sentinela de frescor (`sentinel-freshness.yml`)
+roda 09:30 UTC de seg a sex e abre issue por cidade que parar de render diario;
+`scripts/diagnose-collection.mjs` classifica a causa raiz de cada parada entre
+atraso nosso, fonte que parou de publicar e cidade que a fonte nao indexa.
 
 A documentacao funcional de cada fonte (contrato de saida, principios, proximos
 passos) continua em [`sources/`](./sources/) — `collectors/` hospeda o codigo,
@@ -121,21 +122,22 @@ by the fiscal engine
 
 ### Status
 
-**Bootstrap complete** (PR 2/7 of the MIT-02/EVO-002 set). TypeScript workspace
-configured, CI gates active (lint, typecheck, test, terraform fmt/validate/tflint/checkov).
-No collector implemented in this repo yet — Querido Diario migrates in PR 3,
-supplier-collector (RFB + CGU) is born in PR 5.
+**In production.** Both collectors run as EventBridge-scheduled Lambdas and are
+deployed from this repo. The migration out of
+`fiscal-digital/packages/collector/` is complete — that directory no longer
+exists in the monorepo.
 
-Until then, the production Querido Diario collector remains in
-[`fiscal-digital/packages/collector/`](https://github.com/fiscal-digital/fiscal-digital/tree/main/packages/collector)
-(EventBridge-scheduled Lambda, daily 07:00 UTC pipeline).
+### Collectors
 
-### Planned collectors
+| Path | Source | Lambda in prod | Schedule |
+|---|---|---|---|
+| `collectors/querido-diario/` | Querido Diario (OKFN BR) | `fiscal-digital-collector-prod` | 07:00 UTC, Mon-Fri |
+| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | `fiscal-digital-supplier-collector-prod` | 08:00 UTC, daily |
 
-| Path | Source | Status |
-|---|---|---|
-| `collectors/querido-diario/` | Querido Diario (OKFN BR) | Migrates in PR 3 |
-| `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | Born in PR 5 |
+Current coverage: 50 cities. The freshness sentinel (`sentinel-freshness.yml`)
+runs at 09:30 UTC Mon-Fri and opens one issue per city that stops publishing;
+`scripts/diagnose-collection.mjs` classifies each stall by root cause — our own
+lag, a source that stopped publishing, or a city the source never indexed.
 
 Per-source documentation (output contract, principles, next steps) lives in
 [`sources/`](./sources/) — `collectors/` hosts the code, `sources/` hosts the
