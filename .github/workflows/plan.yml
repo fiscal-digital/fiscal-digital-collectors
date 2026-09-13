@@ -34,13 +34,14 @@ jobs:
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # FOLLOW-UP: restaurar `npm ci` apos regerar package-lock.json com
-        # `@fiscal-digital/engine@0.1.1` resolvido. Regen requer gh CLI local
-        # com scope `read:packages` (Diego: `gh auth refresh --scopes read:packages`
-        # + `rm package-lock.json node_modules && npm install` + commit).
-        # No CI o GITHUB_TOKEN ja tem read:packages para o proprio repo via
-        # grant "Manage Actions access", entao `npm install` funciona aqui.
-        run: npm install --no-audit --no-fund
+        # `npm ci` restaurado (#152 item 3): instala exatamente o que o lock
+        # declara e falha se lock e package.json divergirem. Era `npm install`
+        # enquanto o lock resolvia `@fiscal-digital/engine@0.1.1`; regenerado
+        # pelo workflow `regenerate-lock.yml` neste mesmo PR, ja em 0.1.3.
+        # Este gate e o que teria pego a divergencia lock/package.json que o
+        # bump para ^0.1.3 (#58) deixou passar — `npm install` a conserta em
+        # silencio, `npm ci` a denuncia.
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
