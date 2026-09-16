@@ -61,7 +61,7 @@ resource "aws_cloudwatch_log_group" "collector" {
   retention_in_days = 30
 }
 
-# ─── EventBridge — schedule MON-FRI 07:00 UTC ───────────────────────────────
+# ─── EventBridge — schedule MON-FRI 07:07 UTC ───────────────────────────────
 # 2026-05-11: retomada do schedule diario.
 # 2026-06-07: alterado para MON-FRI apos auditoria de 14 dias (24/05 a 07/06)
 # que confirmou ZERO ingest em sabados/domingos mesmo nas 5 cidades onde QD
