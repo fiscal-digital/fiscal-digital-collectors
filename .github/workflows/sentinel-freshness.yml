@@ -5,7 +5,7 @@ name: Sentinela de frescor
 
 on:
   schedule:
-    # 09:30 UTC seg-sex — ~2h30 depois do cron de coleta (07:00 UTC MON-FRI).
+    # 09:30 UTC seg-sex — ~2h20 depois do cron de coleta (07:07 UTC MON-FRI).
     - cron: "30 9 * * 1-5"
   workflow_dispatch:
     inputs:
