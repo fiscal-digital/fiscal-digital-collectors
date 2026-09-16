@@ -71,7 +71,7 @@ resource "aws_cloudwatch_log_group" "collector" {
 
 resource "aws_cloudwatch_event_rule" "collector_daily" {
   name        = "fiscal-digital-daily-collector-prod"
-  description = "Aciona o collector segunda a sexta as 07:00 UTC (04:00 BRT)."
+  description = "Aciona o collector segunda a sexta as 07:07 UTC (04:07 BRT)."
   # 07:07 e nao 07:00: minuto cheio e quando todo cron do planeta dispara
   # contra a mesma API publica. Sair do minuto zero e cortesia com o Querido
   # Diario ("bom senso para manter taxa de requisicao baixa") — e nos tira da
