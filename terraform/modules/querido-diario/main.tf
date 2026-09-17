@@ -61,7 +61,7 @@ resource "aws_cloudwatch_log_group" "collector" {
   retention_in_days = 30
 }
 
-# ─── EventBridge — schedule MON-FRI 07:00 UTC ───────────────────────────────
+# ─── EventBridge — schedule MON-FRI 07:07 UTC ───────────────────────────────
 # 2026-05-11: retomada do schedule diario.
 # 2026-06-07: alterado para MON-FRI apos auditoria de 14 dias (24/05 a 07/06)
 # que confirmou ZERO ingest em sabados/domingos mesmo nas 5 cidades onde QD
@@ -70,9 +70,13 @@ resource "aws_cloudwatch_log_group" "collector" {
 # ~28% de invocacoes Lambda sem perda de cobertura.
 
 resource "aws_cloudwatch_event_rule" "collector_daily" {
-  name                = "fiscal-digital-daily-collector-prod"
-  description         = "Aciona o collector segunda a sexta as 07:00 UTC (04:00 BRT)."
-  schedule_expression = "cron(0 7 ? * MON-FRI *)"
+  name        = "fiscal-digital-daily-collector-prod"
+  description = "Aciona o collector segunda a sexta as 07:07 UTC (04:07 BRT)."
+  # 07:07 e nao 07:00: minuto cheio e quando todo cron do planeta dispara
+  # contra a mesma API publica. Sair do minuto zero e cortesia com o Querido
+  # Diario ("bom senso para manter taxa de requisicao baixa") — e nos tira da
+  # frente da fila de quem e cortado primeiro quando eles estao no limite.
+  schedule_expression = "cron(7 7 ? * MON-FRI *)"
 }
 
 resource "aws_cloudwatch_event_target" "collector" {

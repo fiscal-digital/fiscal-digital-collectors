@@ -32,7 +32,7 @@ existe mais no monorepo.
 
 | Path | Fonte | Lambda em prod | Agendamento |
 |---|---|---|---|
-| `collectors/querido-diario/` | [Querido Diario](https://queridodiario.ok.org.br) (OKFN BR) | `fiscal-digital-collector-prod` | 07:00 UTC, seg-sex |
+| `collectors/querido-diario/` | [Querido Diario](https://queridodiario.ok.org.br) (OKFN BR) | `fiscal-digital-collector-prod` | 07:07 UTC, seg-sex |
 | `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | `fiscal-digital-supplier-collector-prod` | 08:00 UTC, diario |
 
 Cobertura atual: 50 cidades. A sentinela de frescor (`sentinel-freshness.yml`)
@@ -131,7 +131,7 @@ exists in the monorepo.
 
 | Path | Source | Lambda in prod | Schedule |
 |---|---|---|---|
-| `collectors/querido-diario/` | Querido Diario (OKFN BR) | `fiscal-digital-collector-prod` | 07:00 UTC, Mon-Fri |
+| `collectors/querido-diario/` | Querido Diario (OKFN BR) | `fiscal-digital-collector-prod` | 07:07 UTC, Mon-Fri |
 | `collectors/supplier/` | RFB CNPJ + CGU CEIS/CNEP | `fiscal-digital-supplier-collector-prod` | 08:00 UTC, daily |
 
 Current coverage: 50 cities. The freshness sentinel (`sentinel-freshness.yml`)

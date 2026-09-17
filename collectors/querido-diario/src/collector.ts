@@ -3,7 +3,7 @@ import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs'
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { queryDiario, extractAll, lookupMemory, saveMemory, pdfCacheS3Key, pdfCacheUrl, gazetteKey, requireEnv, createLogger } from '@fiscal-digital/engine'
+import { queryDiario, extractAll, lookupMemory, saveMemory, pdfCacheS3Key, pdfCacheUrl, gazetteKey, requireEnv, createLogger, RateLimiter, USER_AGENT } from '@fiscal-digital/engine'
 import type { CollectorMessage } from '@fiscal-digital/engine'
 
 const sqs = new SQSClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
@@ -16,6 +16,13 @@ const GAZETTES_CACHE_BUCKET = 'fiscal-digital-gazettes-cache-prod'
 const QUEUE_URL = requireEnv('GAZETTES_QUEUE_URL')
 
 const logger = createLogger('collector')
+
+// Downloads de PDF vao para `data.queridodiario.ok.org.br`, o armazenamento do
+// Querido Diario. E outro host, mas a mesma organizacao e o mesmo pedido de
+// bom senso. Ate aqui nao havia limitador nenhum neste caminho: 50 cidades em
+// paralelo, cada uma baixando seus PDFs. Instancia unica do modulo, mesma
+// referencia de 60/min da API.
+const pdfLimiter = new RateLimiter(60)
 
 // Keywords that signal fiscally relevant acts
 const KEYWORDS = [
@@ -183,9 +190,10 @@ async function cachePdf(
   // Baixar o PDF
   let pdfBuffer: ArrayBuffer
   try {
+    await pdfLimiter.acquire()
     const fetchedAt = new Date().toISOString()
     const response = await fetch(originalUrl, {
-      headers: { 'User-Agent': 'FiscalDigital/1.0 (+https://fiscaldigital.org)' },
+      headers: { 'User-Agent': USER_AGENT },
     })
 
     if (!response.ok) {

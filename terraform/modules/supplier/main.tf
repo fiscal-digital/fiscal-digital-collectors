@@ -63,7 +63,7 @@ resource "aws_cloudwatch_log_group" "supplier_collector" {
 
 # ─── EventBridge — schedule diario 08:00 UTC (refresh PROFILEs > 30 dias) ───
 # 08:00 UTC = 05:00 BRT — off-peak para nao competir com o collector-prod
-# (07:00 UTC) nem com cargas matinais das APIs externas (BrasilAPI/CGU).
+# (07:07 UTC) nem com cargas matinais das APIs externas (BrasilAPI/CGU).
 
 resource "aws_cloudwatch_event_rule" "supplier_refresh_daily" {
   name                = "fiscal-digital-supplier-refresh-prod"
