@@ -4,9 +4,25 @@ jest.mock('@fiscal-digital/engine', () => ({
   ...jest.requireActual('@fiscal-digital/engine'),
   requireEnv: (k: string) => process.env[k] ?? 'https://sqs.test/queue',
   createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+  // Sem espera real: o limitador de 60/min espaçaria cada chamada em 1 s.
+  RateLimiter: jest.fn().mockImplementation(() => ({ acquire: jest.fn().mockResolvedValue(undefined) })),
 }))
 
-import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark, cityIdFromGazetteKey, buildCollectorMessage } from '../collector'
+// S3: só o `send` do client é falso; os Commands são os reais (instanceof funciona).
+const mockS3Send = jest.fn()
+jest.mock('@aws-sdk/client-s3', () => ({
+  ...jest.requireActual('@aws-sdk/client-s3'),
+  S3Client: jest.fn().mockImplementation(() => ({ send: (...args: unknown[]) => mockS3Send(...args) })),
+}))
+
+import crypto from 'node:crypto'
+import { HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { gazetteKey, USER_AGENT } from '@fiscal-digital/engine'
+import type { Gazette } from '@fiscal-digital/engine'
+import { LOOKBACK_DAYS, sinceWithLookback, nextWatermark, cityIdFromGazetteKey, buildCollectorMessage, rawTxtKey, cacheRawTxt } from '../collector'
+
+const mockFetch = jest.fn()
+global.fetch = mockFetch
 
 describe('sinceWithLookback', () => {
   it('volta LOOKBACK_DAYS a partir do watermark', () => {
@@ -98,5 +114,116 @@ describe('buildCollectorMessage', () => {
     const msg = buildCollectorMessage(gazette, entities, null)
     expect(msg.excerpts).toEqual(['dispensa de licitação nº 42'])
     expect(msg).not.toHaveProperty('excerptsS3Key')
+  })
+})
+
+// ── Camada raw (#166): texto integral do diário ─────────────────────────────
+
+const PDF_URL = 'https://data.queridodiario.ok.org.br/4305108/2026-03-15/abc123.pdf'
+const TXT_URL = 'https://data.queridodiario.ok.org.br/4305108/2026-03-15/abc123.txt'
+
+function makeGazette(override: Partial<Gazette> = {}): Gazette {
+  return {
+    id: '4305108#2026-03-15#1',
+    territory_id: '4305108',
+    date: '2026-03-15',
+    url: PDF_URL,
+    excerpts: ['Dispensa de licitação'],
+    txt_url: TXT_URL,
+    ...override,
+  }
+}
+
+function s3NotFound(): void {
+  mockS3Send.mockImplementation((cmd: unknown) =>
+    cmd instanceof HeadObjectCommand ? Promise.reject(new Error('NotFound')) : Promise.resolve({}),
+  )
+}
+
+function putCalls(): PutObjectCommand[] {
+  return mockS3Send.mock.calls.map(c => c[0]).filter((c): c is PutObjectCommand => c instanceof PutObjectCommand)
+}
+
+describe('rawTxtKey', () => {
+  it('deriva raw/txt/{tid}/{date}/{qdhash}.txt só da gazette — sem manifesto', () => {
+    const hash = gazetteKey(PDF_URL)?.split('#').pop()
+    expect(hash).toBeTruthy()
+    expect(rawTxtKey(makeGazette())).toBe(`raw/txt/4305108/2026-03-15/${hash}.txt`)
+  })
+
+  it('url inválida: null', () => {
+    expect(rawTxtKey(makeGazette({ url: 'nao-e-url' }))).toBeNull()
+  })
+})
+
+describe('cacheRawTxt', () => {
+  beforeEach(() => {
+    mockS3Send.mockReset()
+    mockFetch.mockReset()
+  })
+
+  it('sem txt_url: não busca nada nem toca no S3', async () => {
+    const ok = await cacheRawTxt(makeGazette({ txt_url: undefined }))
+    expect(ok).toBe(false)
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockS3Send).not.toHaveBeenCalled()
+  })
+
+  it('já arquivado (HEAD ok): idempotente — sem fetch, sem PutObject', async () => {
+    mockS3Send.mockResolvedValue({})
+    const ok = await cacheRawTxt(makeGazette())
+    expect(ok).toBe(false)
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(putCalls()).toHaveLength(0)
+  })
+
+  it('novo: busca txt_url com o User-Agent da engine e grava na chave derivada, com sha256 e origem nos metadados', async () => {
+    s3NotFound()
+    const text = 'PREFEITURA MUNICIPAL DE CAXIAS DO SUL\nDispensa de licitação nº 12/2026 ...'
+    mockFetch.mockResolvedValue({ ok: true, status: 200, text: async () => text })
+
+    const ok = await cacheRawTxt(makeGazette())
+
+    expect(ok).toBe(true)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch.mock.calls[0][0]).toBe(TXT_URL)
+    expect(mockFetch.mock.calls[0][1]?.headers?.['User-Agent']).toBe(USER_AGENT)
+
+    const puts = putCalls()
+    expect(puts).toHaveLength(1)
+    const input = puts[0].input
+    expect(input.Key).toBe(rawTxtKey(makeGazette()))
+    expect(input.ContentType).toBe('text/plain; charset=utf-8')
+    expect(Buffer.from(input.Body as Uint8Array).toString('utf-8')).toBe(text)
+    expect(input.Metadata).toMatchObject({
+      sha256: crypto.createHash('sha256').update(text, 'utf-8').digest('hex'),
+      'source-url': TXT_URL,
+      'pdf-url': PDF_URL,
+      'territory-id': '4305108',
+      date: '2026-03-15',
+      chars: String(text.length),
+    })
+  })
+
+  it('fonte responde erro: não grava e não lança (falha não-crítica)', async () => {
+    s3NotFound()
+    mockFetch.mockResolvedValue({ ok: false, status: 503, text: async () => '' })
+    await expect(cacheRawTxt(makeGazette())).resolves.toBe(false)
+    expect(putCalls()).toHaveLength(0)
+  })
+
+  it('texto vazio: não grava', async () => {
+    s3NotFound()
+    mockFetch.mockResolvedValue({ ok: true, status: 200, text: async () => '   \n' })
+    await expect(cacheRawTxt(makeGazette())).resolves.toBe(false)
+    expect(putCalls()).toHaveLength(0)
+  })
+
+  it('S3 falha no PUT: não lança (warn e segue)', async () => {
+    mockS3Send.mockImplementation((cmd: unknown) =>
+      cmd instanceof HeadObjectCommand ? Promise.reject(new Error('NotFound')) : Promise.reject(new Error('AccessDenied')),
+    )
+    mockFetch.mockResolvedValue({ ok: true, status: 200, text: async () => 'texto' })
+    await expect(cacheRawTxt(makeGazette())).resolves.toBe(false)
   })
 })

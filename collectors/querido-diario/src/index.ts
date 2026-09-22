@@ -21,7 +21,7 @@ export const handler = async (
   if (detail.backfill && detail.territory_id) {
     logger.info('backfill', { territory_id: detail.territory_id, since: detail.since })
     const result = await runCollector({ territory_id: detail.territory_id, since: detail.since })
-    logger.info('backfill done', { processed: result.processed, sent: result.sent })
+    logger.info('backfill done', { processed: result.processed, sent: result.sent, rawTxtCached: result.rawTxtCached })
     return
   }
 
@@ -33,7 +33,7 @@ export const handler = async (
   let falhas = 0
   for (const r of results) {
     if (r.status === 'fulfilled') {
-      logger.info('cidade processada', { name: r.value.name, processed: r.value.processed, sent: r.value.sent })
+      logger.info('cidade processada', { name: r.value.name, processed: r.value.processed, sent: r.value.sent, rawTxtCached: r.value.rawTxtCached })
     } else {
       falhas++
       logger.error('cidade falhou', { reason: r.reason })

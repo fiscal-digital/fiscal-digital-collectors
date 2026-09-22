@@ -4,7 +4,7 @@ import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { queryDiario, extractAll, lookupMemory, saveMemory, pdfCacheS3Key, pdfCacheUrl, gazetteKey, requireEnv, createLogger, RateLimiter, USER_AGENT } from '@fiscal-digital/engine'
-import type { CollectorMessage } from '@fiscal-digital/engine'
+import type { CollectorMessage, Gazette } from '@fiscal-digital/engine'
 
 const sqs = new SQSClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? 'us-east-1' })
@@ -70,7 +70,14 @@ export interface CollectorConfig {
   since?: string   // override; defaults to last processed date
 }
 
-export async function runCollector(config: CollectorConfig): Promise<{ processed: number; sent: number }> {
+export interface CollectorRunResult {
+  processed: number
+  sent: number
+  /** Diários cujo texto integral foi arquivado em `raw/txt/` neste run. */
+  rawTxtCached: number
+}
+
+export async function runCollector(config: CollectorConfig): Promise<CollectorRunResult> {
   const { territory_id } = config
   // Watermark cru lido UMA vez: alimenta o `since` (com lookback) e é preservado
   // no save final quando o run não persiste nada (saveMemory é Put/replace —
@@ -85,6 +92,7 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
   let offset = 0
   let processed = 0
   let sent = 0
+  let rawTxtCached = 0
   let maxPersistedDate: string | null = null
   const pageSize = 50
 
@@ -118,6 +126,8 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
       const cachedPdfUrl = await cachePdf(gazette.territory_id, gazette.id, gazette.url)
       await cacheTxt(gazette.url, text)
       const excerptsS3Key = await cacheExcerptsJson(gazette.url, gazette.date, gazette.excerpts)
+      // Camada raw (#166): texto INTEGRAL do diário, o que a Fase 2 vai ler.
+      if (await cacheRawTxt(gazette)) rawTxtCached++
 
       const msg: CollectorMessage = buildCollectorMessage(gazette, entities, excerptsS3Key)
 
@@ -157,7 +167,84 @@ export async function runCollector(config: CollectorConfig): Promise<{ processed
     },
   })
 
-  return { processed, sent }
+  return { processed, sent, rawTxtCached }
+}
+
+/**
+ * Chave S3 do texto integral de uma gazette na camada raw.
+ *
+ * `raw/txt/{territory_id}/{date}/{qdhash}.txt`, onde `qdhash` é o último
+ * segmento de `gazetteKey(url)` — o hash da URL canônica do QD. É derivável
+ * SÓ da gazette: quem tiver a mensagem do collector (analyzer, Fase 2) acha o
+ * texto sem manifesto e sem lookup no DDB.
+ *
+ * O backfill histórico (`fiscal-digital/scripts/ingest-aggregates.mjs`,
+ * Caxias e Porto Alegre 2021–2025) usa outra convenção no mesmo prefixo:
+ * `raw/txt/{tid}/{date}/{sha16 do texto}.txt` + `raw/manifests/{tid}/{ano}.json`.
+ * As duas convivem; ver sources/querido-diario/README.md ("Camada raw").
+ */
+export function rawTxtKey(gazette: Pick<Gazette, 'territory_id' | 'date' | 'url'>): string | null {
+  const key = gazetteKey(gazette.url)
+  const hash = key?.split('#').pop()
+  if (!hash) return null
+  return `raw/txt/${gazette.territory_id}/${gazette.date}/${hash}.txt`
+}
+
+/**
+ * Arquiva o texto integral do diário (o `.txt` que o próprio QD extraiu) na
+ * camada raw. Só quando o QD informa `txt_url`; idempotente (HEAD antes de
+ * PUT); passa pelo MESMO limitador dos PDFs — é o mesmo host
+ * (`data.queridodiario.ok.org.br`), então é o mesmo orçamento de 60/min.
+ *
+ * Não escreve manifesto de propósito: o cron das 07:07 e um backfill da mesma
+ * cidade fariam read-modify-write concorrente no mesmo JSON. A Fase 2 resolve
+ * pela chave derivada primeiro e cai no manifesto só para o histórico.
+ *
+ * Falha não-crítica: `warn` e segue — o pipeline de excerpts não depende disto.
+ * Retorna true só quando escreveu agora (alimenta o contador do log).
+ */
+export async function cacheRawTxt(gazette: Gazette): Promise<boolean> {
+  if (!gazette.txt_url) return false
+  const key = rawTxtKey(gazette)
+  if (!key) return false
+  if (await s3ObjectExists(key)) return false
+
+  try {
+    await pdfLimiter.acquire()
+    const response = await fetch(gazette.txt_url, { headers: { 'User-Agent': USER_AGENT } })
+    if (!response.ok) {
+      logger.warn('raw txt fetch falhou', { txtUrl: gazette.txt_url, status: response.status })
+      return false
+    }
+    const text = await response.text()
+    if (!text.trim()) {
+      logger.warn('raw txt vazio — skip', { txtUrl: gazette.txt_url })
+      return false
+    }
+    const sha256 = crypto.createHash('sha256').update(text, 'utf-8').digest('hex')
+
+    await s3.send(new PutObjectCommand({
+      Bucket: GAZETTES_CACHE_BUCKET,
+      Key: key,
+      Body: Buffer.from(text, 'utf-8'),
+      ContentType: 'text/plain; charset=utf-8',
+      CacheControl: 'public, max-age=31536000, immutable',
+      Metadata: {
+        sha256,
+        'source-url': gazette.txt_url,
+        'pdf-url': gazette.url,
+        'territory-id': gazette.territory_id,
+        date: gazette.date,
+        chars: String(text.length),
+        'archived-at': new Date().toISOString(),
+      },
+    }))
+    logger.info('raw txt cached', { key, chars: text.length })
+    return true
+  } catch (err) {
+    logger.warn('raw txt cache error', { key, err })
+    return false
+  }
 }
 
 /**
