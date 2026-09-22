@@ -32,6 +32,21 @@ A [documentação da API pública](https://docs.queridodiario.ok.org.br/pt-br/la
 
 Histórico: até setembro de 2026 o limitador não serializava sob concorrência e o collector disparava as 50 cidades no mesmo segundo — cerca de 50 vezes a referência. Corrigido em `fiscal-digital#fix/qd-rate-limit-real`.
 
+**Camada raw (texto integral):**
+
+O QD entrega, por diário, até N *excerpts* de 300 caracteres em volta das keywords — é o que alimenta o pipeline hoje. O canário da Fase 1 (`fiscal-digital#179`, issue `#166`) mostrou que os fiscais lendo o **texto integral** com janelas locais encontram várias vezes mais achados publicáveis. Por isso o collector também arquiva o texto integral em `s3://fiscal-digital-gazettes-cache-prod/raw/`, a partir do `txt_url` que a própria API do QD devolve (mesmo path do PDF, extensão `.txt`) — sem baixar e extrair o PDF de novo.
+
+Duas convenções convivem no mesmo prefixo:
+
+| Quem escreve | Chave | Manifesto |
+|---|---|---|
+| Collector diário (esta Lambda, a partir de setembro de 2026) | `raw/txt/{territory_id}/{date}/{qdhash}.txt` — `qdhash` é o hash da URL canônica (`gazetteKey`), derivável só da gazette | **não** escreve |
+| Backfill histórico (`fiscal-digital/scripts/ingest-aggregates.mjs`, Caxias e Porto Alegre 2021–2025) | `raw/txt/{territory_id}/{date}/{sha16 do texto}.txt` | `raw/manifests/{territory_id}/{ano}.json` |
+
+O diário não escreve manifesto de propósito: o cron das 07:07 e um backfill da mesma cidade fariam *read-modify-write* concorrente no mesmo JSON. A Fase 2 (analyzer lendo o texto integral) resolve pela chave derivada primeiro e cai no manifesto só para o histórico.
+
+Metadados do objeto: `sha256`, `source-url` (o `.txt`), `pdf-url`, `territory-id`, `date`, `chars`, `archived-at`. Idempotente (HEAD antes de PUT); a busca do `.txt` passa pelo **mesmo limitador dos PDFs** (mesmo host, mesmo orçamento de 60/min) com o mesmo User-Agent; falha é `warn` e não bloqueia o pipeline. Custo: um GET a mais por diário novo, texto de dezenas a centenas de KB, S3 STANDARD. O log `cidade processada` traz `rawTxtCached`.
+
 **Princípios herdados:** idempotência, rate limit, cache antes de chamada e logs estruturados JSON definidos em [../../README.md#princípios](../../README.md#princípios).
 
 **Próximos passos:**
@@ -53,6 +68,8 @@ Histórico: até setembro de 2026 o limitador não serializava sob concorrência
 **What Querido Diário asks and how we comply:** the [public API docs](https://docs.queridodiario.ok.org.br/en/latest/using/public-api.html) impose no formal restriction; they ask for "common sense" to keep the request rate low, with **60 requests/minute** as the reference. We apply a slot-reserving `RateLimiter` (one instance per process) at both call sites — the `query_diario` skill (API) and PDF downloads in the collector (storage host), each with its own 60/min budget; a single retry on transient 429/5xx or network failure, honoring `Retry-After` (30 s cap); one User-Agent `FiscalDigital/<version> (+https://fiscaldigital.org)` everywhere; and a cron off the top of the hour. There is **no SQS** on the path to the source — the pipeline's SQS sits after the collector — despite what an earlier version of this README claimed.
 
 **Output contract fields:** `gazetteId`, `territory_id`, `date`, `edition`, `pdfUrl`, `cachedAt`, `excerptIds`.
+
+**Raw layer (full text):** besides the 300-char excerpts, the collector archives each gazette's full text in `s3://fiscal-digital-gazettes-cache-prod/raw/txt/{territory_id}/{date}/{qdhash}.txt`, fetched from the `txt_url` the QD API already returns (same path as the PDF, `.txt` extension) — no second PDF download or extraction. `qdhash` is the hash of the canonical URL (`gazetteKey`), so the key is derivable from the gazette alone. The historical backfill (`ingest-aggregates.mjs`, Caxias do Sul and Porto Alegre 2021–2025) uses a sibling convention under the same prefix (`{sha16 of text}.txt` plus `raw/manifests/{territory_id}/{year}.json`); the daily collector deliberately writes no manifest to avoid concurrent read-modify-write with backfills. Idempotent (HEAD before PUT), same rate limiter and User-Agent as PDF downloads, non-blocking on failure. Motivation: Phase 1 canary of issue #166 (fiscal-digital#179) — fiscais reading full text find several times more publishable findings than on excerpts.
 
 **Next steps:** extract npm package `@fiscal-digital/collectors-qd`; document L2/L3' S3 formats; expose per-city coverage metrics.
 
