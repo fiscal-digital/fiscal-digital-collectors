@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      allow_rollback:
+        description: "Implantar um commit que NÃO é o topo da main (rollback intencional)"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -18,8 +23,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # Re-run de um deploy antigo reimplanta o commit daquele run e termina
+  # verde (fiscal-digital#214). Aqui não há aprovação manual: o guarda é a
+  # única barreira antes do apply.
+  guard-main-tip:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Commit é o topo da main?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_ROLLBACK: ${{ inputs.allow_rollback || false }}
+        run: .github/scripts/guard-main-tip.sh
+
+  deploy:
+    needs: guard-main-tip
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
@@ -76,9 +97,37 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false
 
+      # Plan salvo + guarda: o apply aplica exatamente o que foi checado.
+      # Antes era `apply -auto-approve` direto, sem nenhuma barreira.
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -input=false -var-file=environments/prod.tfvars -out=tfplan.bin
+
+      - name: Guard destroys (padrão LRN-20260607-004 da engine)
+        working-directory: terraform
+        run: |
+          terraform show -no-color tfplan.bin > plan-text.txt
+          # Os recursos daqui são Lambdas, agendamentos, filas e tabelas em
+          # uso diário: nenhum destroy/replace é rotineiro. Qualquer um barra.
+          if grep -E "^  # .*(will be destroyed|must be replaced|will be replaced)" plan-text.txt; then
+            if git log -1 --pretty=%B | grep -qF "[allow-critical-destroy]"; then
+              echo "::warning::Destroy aceito via [allow-critical-destroy] no commit"
+            else
+              echo "::error::Plan destrói ou substitui recursos (acima). Bypass: [allow-critical-destroy] na mensagem do commit."
+              exit 1
+            fi
+          fi
+          echo "Plan sem destroys — OK"
+
+      - name: Commit ainda é o topo da main?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_ROLLBACK: ${{ inputs.allow_rollback || false }}
+        run: .github/scripts/guard-main-tip.sh
+
       - name: Terraform Apply
         working-directory: terraform
-        run: terraform apply -var-file=environments/prod.tfvars -auto-approve
+        run: terraform apply -input=false tfplan.bin
 
       - name: Deploy Lambda code
         # Loop sobre os zips gerados. Mapping dirname → Lambda function name
@@ -121,3 +170,6 @@ jobs:
               --no-cli-pager
             echo "::endgroup::"
           done
+
+      - name: Smoke pós-deploy
+        run: .github/scripts/smoke-collectors.sh
