@@ -91,3 +91,31 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.collector_daily.arn
 }
+
+# ─── EventBridge — segunda passada MON-FRI 13:37 UTC ────────────────────────
+# Desde 12/09/2026 o QD devolve 5xx em toda execução das 07:07: 8 a 92 falhas
+# por run, e em 23/09, 24/09 e 01/10 as 50 cidades falharam. A coleta é por
+# watermark, então nada se perde, mas a cidade que falha fica um dia útil
+# atrasada. Uma segunda execução ~6h30 depois pega o que foi recusado de
+# madrugada e o que foi publicado pela manhã. É idempotente por URL canônica
+# (isAlreadyQueued): cidade em dia custa 1 requisição ao QD.
+
+resource "aws_cloudwatch_event_rule" "collector_retry" {
+  name        = "fiscal-digital-retry-collector-prod"
+  description = "Segunda passada do collector, segunda a sexta as 13:37 UTC (10:37 BRT)."
+  # Fora do minuto cheio, mesma cortesia do cron das 07:07.
+  schedule_expression = "cron(37 13 ? * MON-FRI *)"
+}
+
+resource "aws_cloudwatch_event_target" "collector_retry" {
+  rule = aws_cloudwatch_event_rule.collector_retry.name
+  arn  = aws_lambda_function.collector.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_retry" {
+  statement_id  = "AllowEventBridgeInvokeCollectorRetry"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.collector.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.collector_retry.arn
+}

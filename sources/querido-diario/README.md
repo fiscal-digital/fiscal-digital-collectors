@@ -27,7 +27,7 @@ A [documentação da API pública](https://docs.queridodiario.ok.org.br/pt-br/la
 - **Taxa:** `RateLimiter` com reserva de vaga, instância única por processo, em dois pontos: a skill `query_diario` (API, `api.queridodiario.org.br`) e os downloads de PDF no collector (`data.queridodiario.ok.org.br`). Cada um com orçamento próprio de 60/min. Não há fila SQS nesse caminho — a SQS do pipeline fica *depois* do collector, entre ele e o analyzer, e não limita chamadas à fonte. Uma versão anterior deste README afirmava o contrário.
 - **Retentativa:** uma só, em 429/5xx transitório ou falha de rede, honrando `Retry-After` quando vier (teto de 30 s). Mais que uma vira carga em cima de quem já está fora.
 - **Identificação:** User-Agent único `FiscalDigital/<versão> (+https://fiscaldigital.org)` em toda chamada, API e PDF.
-- **Horário:** cron às 07:07 UTC, fora do minuto cheio em que todo agendador dispara.
+- **Horário:** cron às 07:07 UTC e segunda passada às 13:37 UTC, ambos fora do minuto cheio em que todo agendador dispara. A segunda passada recupera as cidades recusadas com 5xx de madrugada; a coleta é idempotente por URL canônica.
 - **Cache antes de chamada:** gazette já persistida não é buscada de novo; PDF já em S3 não é baixado de novo.
 
 Histórico: até setembro de 2026 o limitador não serializava sob concorrência e o collector disparava as 50 cidades no mesmo segundo — cerca de 50 vezes a referência. Corrigido em `fiscal-digital#fix/qd-rate-limit-real`.
