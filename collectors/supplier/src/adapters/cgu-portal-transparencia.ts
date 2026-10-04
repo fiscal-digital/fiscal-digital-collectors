@@ -47,27 +47,55 @@ export interface SancoesResult {
   source: string
 }
 
-interface CguRecord {
-  tipoSancao: string
+/** Registro cru do Portal da Transparência (CEIS e CNEP têm o mesmo shape). */
+export interface CguRecord {
+  sancionado?: { nome?: string; codigoFormatado?: string }
+  pessoa?: { cnpjFormatado?: string; cpfFormatado?: string }
+  tipoSancao?: string | { descricaoResumida?: string; descricaoPortal?: string }
+  orgaoSancionador?: string | { nome?: string; siglaUf?: string; esfera?: string }
   dataInicioSancao?: string
   dataFimSancao?: string
-  orgaoSancionador?: string
+}
+
+/** CNPJ do sancionado no registro, só dígitos — comparável ao consultado. */
+export function sancionadoCodigo(item: CguRecord): string {
+  return (item.sancionado?.codigoFormatado ?? item.pessoa?.cnpjFormatado ?? '').replace(/\D/g, '')
+}
+
+/** `tipoSancao` e `orgaoSancionador` vêm como objeto na API atual; já vieram como string. */
+export function normalizeCguRecord(item: CguRecord, type: SancaoType): Sancao {
+  const sanction = typeof item.tipoSancao === 'string'
+    ? item.tipoSancao
+    : (item.tipoSancao?.descricaoResumida ?? item.tipoSancao?.descricaoPortal ?? '')
+  const organ = typeof item.orgaoSancionador === 'string'
+    ? item.orgaoSancionador
+    : item.orgaoSancionador?.nome
+  return {
+    type,
+    sanction,
+    ...(item.dataInicioSancao && { startDate: item.dataInicioSancao }),
+    ...(item.dataFimSancao && { endDate: item.dataFimSancao }),
+    ...(organ && { organ }),
+  }
 }
 
 async function collectFrom(
   res: PromiseSettledResult<Response>,
   type: SancaoType,
+  cnpj: string,
 ): Promise<Sancao[]> {
   if (res.status !== 'fulfilled' || !res.value.ok) return []
   try {
     const data = (await res.value.json()) as CguRecord[]
-    return data.map(item => ({
-      type,
-      sanction: item.tipoSancao,
-      startDate: item.dataInicioSancao,
-      endDate: item.dataFimSancao,
-      organ: item.orgaoSancionador,
-    }))
+    // Nenhum registro entra sem o CNPJ do sancionado conferir com o
+    // consultado. Em 03/10/2026 a API ignorava o filtro e devolvia a primeira
+    // página do cadastro inteiro: 108 PROFILEs em prod ficaram com 30 sanções
+    // de terceiros cada (fiscal-digital#243).
+    const proprios = data.filter(item => sancionadoCodigo(item) === cnpj)
+    if (proprios.length < data.length) {
+      logger.warn('CGU devolveu registros de OUTRO sancionado — descartados', { type, cnpj, descartados: data.length - proprios.length })
+    }
+    return proprios.map(item => normalizeCguRecord(item, type))
   } catch (err) {
     logger.warn('CGU response parse error', { type, err: (err as Error).message })
     return []
@@ -86,8 +114,10 @@ async function collectFrom(
 export async function fetchSanctions(cnpj: string, apiKey: string): Promise<SancoesResult> {
   const clean = cnpj.replace(/\D/g, '')
   const headers = { Accept: 'application/json', 'chave-api-dados': apiKey }
-  const ceisUrl = `${CGU_API}/ceis?cnpjSancionado=${clean}&pagina=1`
-  const cnepUrl = `${CGU_API}/cnep?cnpjSancionado=${clean}&pagina=1`
+  // `codigoSancionado`: o `cnpjSancionado` que usávamos é ignorado pela API
+  // atual (fiscal-digital#243).
+  const ceisUrl = `${CGU_API}/ceis?codigoSancionado=${clean}&pagina=1`
+  const cnepUrl = `${CGU_API}/cnep?codigoSancionado=${clean}&pagina=1`
 
   await throttle()
 
@@ -97,8 +127,8 @@ export async function fetchSanctions(cnpj: string, apiKey: string): Promise<Sanc
   ])
 
   const [ceis, cnep] = await Promise.all([
-    collectFrom(ceisRes, 'CEIS'),
-    collectFrom(cnepRes, 'CNEP'),
+    collectFrom(ceisRes, 'CEIS', clean),
+    collectFrom(cnepRes, 'CNEP', clean),
   ])
 
   return {
