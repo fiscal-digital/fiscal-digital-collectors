@@ -82,18 +82,12 @@ module "querido_diario" {
 # CGU secret ARN: resolvido via data source (evita expor ARN/hash em vars e
 # garante que prod.tfvars nao precise ser atualizado manualmente).
 
-# CGU Portal da Transparencia secret — criado fora do terraform (rotacao manual,
-# fora do blast radius do CI). Lookup por nome evita expor o ARN/hash em vars.
-data "aws_secretsmanager_secret" "cgu" {
-  name = "fiscaldigital-cgu-prod"
-}
-
 module "supplier" {
   source              = "./modules/supplier"
   environment         = var.environment
   aws_region          = var.aws_region
   suppliers_table_arn = local.suppliers_table_arn
   alerts_table_arn    = local.alerts_table_arn
-  cgu_secret_arn      = data.aws_secretsmanager_secret.cgu.arn
+  cgu_param_name      = "/fiscal-digital/prod/cgu" # SSM SecureString, fora do terraform (rotacao manual)
   kms_key_arn         = data.aws_kms_alias.prod.target_key_arn
 }

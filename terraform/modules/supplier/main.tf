@@ -43,7 +43,7 @@ resource "aws_lambda_function" "supplier_collector" {
     variables = merge(local.common_env, {
       SUPPLIERS_TABLE = "fiscal-digital-suppliers-prod"
       ALERTS_TABLE    = "fiscal-digital-alerts-prod"
-      CGU_SECRET_ARN  = var.cgu_secret_arn
+      CGU_PARAM_NAME  = var.cgu_param_name
       LOG_LEVEL       = "INFO"
     })
   }

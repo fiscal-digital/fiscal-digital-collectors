@@ -20,10 +20,9 @@ variable "alerts_table_arn" {
   description = "ARN da DynamoDB table fiscal-digital-alerts-prod (gerenciada no monorepo). Lida no modo backfill."
 }
 
-variable "cgu_secret_arn" {
+variable "cgu_param_name" {
+  description = "Nome do parametro SSM (SecureString) com a chave da API CGU (Portal da Transparencia)"
   type        = string
-  description = "ARN do Secret com a chave-api-dados do Portal da Transparencia. Pode ser vazio em ambientes sem CGU (degrade gracioso)."
-  default     = ""
 }
 
 variable "kms_key_arn" {

@@ -2,7 +2,7 @@
 #
 # Least-privilege:
 #   - DDB: write em suppliers-prod (+ GSI), read em alerts-prod (backfill SCAN)
-#   - Secrets: GetSecretValue em fiscaldigital-cgu-prod-*
+#   - SSM: GetParameter em /fiscal-digital/prod/cgu (SecureString, chave aws/ssm)
 #   - SQS: ReceiveMessage/DeleteMessage na fila supplier_enrich (+ DLQ)
 #   - KMS: Decrypt na chave fiscal-digital-kms-prod (SQS + Secret SSE)
 
@@ -79,10 +79,10 @@ resource "aws_iam_role_policy" "supplier" {
         ]
       },
       {
-        Sid      = "CguSecretRead"
+        Sid      = "CguParamRead"
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:fiscaldigital-cgu-prod-*"]
+        Action   = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${var.cgu_param_name}"]
       },
       {
         Sid    = "EnrichQueueConsume"
