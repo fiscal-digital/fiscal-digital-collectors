@@ -84,7 +84,7 @@ Atributos opcionais (UpdateCommand SET — não sobrescreve com undefined):
 | `rfbStatus` | S | `ok` / `nao_encontrado` / `erro` |
 | `rfbSourceUrl` | S | URL canônica consultada |
 | `rfbCapturedAt` | S | ISO8601 do último lookup RFB com sucesso |
-| `cguEnabled` | B | false se CGU_SECRET_ARN ausente/inválido |
+| `cguEnabled` | B | false se CGU_PARAM_NAME ausente/inválido |
 | `cguCapturedAt` | S | ISO8601 do último lookup CGU |
 | `cguSourceUrl` | S | URLs CEIS + CNEP |
 | `lastLookupAt` | S | ISO8601 — sempre setado, sinaliza refresh |
@@ -96,10 +96,10 @@ Atributos opcionais (UpdateCommand SET — não sobrescreve com undefined):
 |---|---|---|
 | `SUPPLIERS_TABLE` | `fiscal-digital-suppliers-prod` | Tabela DDB |
 | `ALERTS_TABLE` | `fiscal-digital-alerts-prod` | Tabela DDB lida no backfill |
-| `CGU_SECRET_ARN` | (vazio) | ARN do secret com a `chave-api-dados` da CGU |
+| `CGU_PARAM_NAME` | (vazio) | Nome do parametro SSM (SecureString) com a `chave-api-dados` da CGU |
 | `LOG_LEVEL` | `INFO` | Powertools logger |
 
-`CGU_SECRET_ARN` é opcional. Quando ausente ou indisponível, profile fica
+`CGU_PARAM_NAME` é opcional. Quando ausente ou indisponível, profile fica
 marcado com `cguEnabled = false` e segue sem sancoes — degrade gracioso.
 
 ## Rate limits

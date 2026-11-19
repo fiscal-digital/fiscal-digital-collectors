@@ -35,7 +35,7 @@ export interface SupplierProfile {
   rfbCapturedAt?: string
   /** ISO8601 do momento em que CGU foi consultada (ok ou skipped). */
   cguCapturedAt?: string
-  /** false quando CGU_SECRET_ARN ausente ou secret indisponível. */
+  /** false quando CGU_PARAM_NAME ausente ou parametro indisponível. */
   cguEnabled: boolean
   cguSourceUrl?: string
   /** Mensagem de erro do último lookup que falhou (opcional, ajuda RCA). */
